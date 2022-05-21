@@ -49,7 +49,7 @@ library menssages {
         address sender;
         address[] receivers;
         address[] reply_to;
-        string content;
+        bytes content;
         string language;
         string encoding;
         string ontology;
@@ -57,6 +57,8 @@ library menssages {
         string reply_with;
         string in_reply_to;
         uint256 reply_by;
+        string conversation_id;
+        string message_id;
 
     }
 
@@ -98,6 +100,65 @@ library menssages {
         else{
             add_reply_to(self, address(aid));
         } 
+    }
+
+    function set_content(ACLMessage storage self, bytes memory data) public {
+        self.content = data;
+    }
+
+    function set_language(ACLMessage storage self, string memory data) public {
+        self.language = data;
+    }
+
+    function set_encoding(ACLMessage storage self, string memory data) public {
+        self.encoding = data;
+    }
+
+    function set_ontology(ACLMessage storage self, string memory data) public {
+        self.ontology = data;
+    }
+
+    function set_protocol(ACLMessage storage self, string memory data) public {
+        self.protocol = data;
+    }
+
+    function set_conversation_id(ACLMessage storage self, string memory data) public {
+        self.conversation_id = data;
+    }
+
+    function set_message_id(ACLMessage storage self, string memory data) public {
+        self.message_id = data;
+    }
+
+    function set_reply_with(ACLMessage storage self, string memory data) public {
+        self.reply_with = data;
+    }
+
+    function set_in_reply_to(ACLMessage storage self, string memory data) public {
+        self.in_reply_to = data;
+    }
+    
+    function set_reply_by(ACLMessage storage self, string memory data) public {
+        self.reply_with = data;
+    }
+
+    function set_message(ACLMessage storage self, bytes memory data) public {
+        ACLMessage memory aclmsg = abi.decode(data, (ACLMessage));
+        
+        self.performative = aclmsg.performative;
+        self.system_message = aclmsg.system_message;
+        self.conversation_id = aclmsg.conversation_id;
+        self.message_id  = aclmsg.message_id; 
+        self.datetime = aclmsg.datetime;
+        self.sender = aclmsg.sender;
+        self.reply_to  = aclmsg.reply_to;
+        self.content = aclmsg.content;
+        self.language = aclmsg.language;
+        self.encoding = aclmsg.encoding;
+        self.protocol = aclmsg.protocol;
+        self.reply_with = aclmsg.reply_with;
+        self.in_reply_to = aclmsg.in_reply_to;
+        self.reply_by = aclmsg.reply_by;
     }
 
 }
