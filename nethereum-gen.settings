@@ -1,0 +1,7 @@
+{
+    "projectName": "Blade",
+    "namespace": "Blade.Contracts",
+    "lang": 0,
+    "autoCodeGen": true,
+    "projectPath": "../"
+}
