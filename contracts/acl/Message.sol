@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.13;
+pragma solidity >=0.7.0 <0.9.0;
 
 import "../../node_modules/@openzeppelin/contracts/utils/Address.sol";
 
@@ -32,6 +32,7 @@ library Message {
     string constant INFORM_IF = 'inform-if';
     string constant PROXY = 'proxy';
     string constant PROPAGATE = 'propagate';
+    string constant Null = 'Null';
 
     string constant FIPA_REQUEST_PROTOCOL = 'fipa-request protocol';
     string constant FIPA_QUERY_PROTOCOL = 'fipa-query protocol';
@@ -151,7 +152,7 @@ library Message {
         self.datetime = aclmsg.datetime;
         self.sender = aclmsg.sender;
 
-        for (uint i=0; i<aclmsg.receivers.length; i++){
+        for (uint i = 0; i < aclmsg.receivers.length; i++){
             self.receivers.push(aclmsg.receivers[i]);
             self.reply_to.push(aclmsg.receivers[i]);
         }
