@@ -1,4 +1,6 @@
 node_modules
+package.json
+package-lock.json
 build
 target
 .idea
@@ -6,19 +8,3 @@ target
 out
 cache
 broadcast
-
-docs/
-acc-map/
-fipa-core/
-pom.xml
-AGENTS.md
-START_HERE.md
-.cursor/
-blade-cursor-development-plan/
-contracts/
-migrations/
-package.json
-package-lock.json
-truffle-config.js
-test/acl/
-nethereum-gen.settings
