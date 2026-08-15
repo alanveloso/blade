@@ -1,0 +1,20 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+# lib/forge-std is vendored in-tree (not a git submodule).
+test = "test"
+solc = "0.8.26"
+optimizer = true
+optimizer_runs = 200
+via_ir = false
+fs_permissions = [{ access = "read", path = "./" }]
+
+# Invariant budget for local/CI tests.
+[profile.default.invariant]
+runs = 48
+depth = 24
+fail_on_revert = true
+
+[fmt]
+line_length = 100

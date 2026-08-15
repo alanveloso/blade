@@ -1,0 +1,21 @@
+name: Core
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  forge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - run: forge --version
+      - run: forge fmt --check
+      - run: forge build --sizes
+      - run: forge test
