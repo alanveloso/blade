@@ -16,17 +16,17 @@ contract RequestHandler is Test {
     ScriptedRequestAgent public alice;
     ScriptedRequestAgent public bob;
     ScriptedRequestAgent public stranger;
-    address public acc;
+    address public relay;
 
     bytes32[N_IDS] internal ids;
     uint256 public calls;
     uint256 public successfulMutations;
 
     constructor() {
-        acc = address(0xACC);
-        alice = new ScriptedRequestAgent(acc);
-        bob = new ScriptedRequestAgent(acc);
-        stranger = new ScriptedRequestAgent(acc);
+        relay = address(0x11EE);
+        alice = new ScriptedRequestAgent(relay);
+        bob = new ScriptedRequestAgent(relay);
+        stranger = new ScriptedRequestAgent(relay);
         ids[0] = keccak256("inv-req-0");
         ids[1] = keccak256("inv-req-1");
         ids[2] = keccak256("inv-req-2");
@@ -82,14 +82,14 @@ contract RequestHandler is Test {
         calls++;
     }
 
-    function accWrongLogical(uint8 idSel) external {
+    function relayWrongLogical(uint8 idSel) external {
         bytes32 id = _id(idSel);
         bytes32[6] memory before = _packAll();
         Message memory m = _reply(id, Performative.Inform);
         m.logicalSender = keccak256("eve");
-        vm.prank(acc);
+        vm.prank(relay);
         try alice.handle(m) {} catch {}
-        vm.prank(acc);
+        vm.prank(relay);
         try bob.handle(m) {} catch {}
         _assertUnchanged(before);
         calls++;

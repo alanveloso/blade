@@ -21,7 +21,7 @@ contract ContractNetParticipant is Agent {
         bytes32 indexed conversationId, uint8 phase, uint8 performative
     );
 
-    constructor(address trustedAcc_) Agent(trustedAcc_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function session(bytes32 conversationId) external view returns (Session memory) {
         return _cn[conversationId];

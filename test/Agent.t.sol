@@ -9,7 +9,7 @@ import {Protocol} from "../src/core/Protocol.sol";
 contract EchoAgent is Agent {
     address public lastPeer;
 
-    constructor(address trustedAcc_) Agent(trustedAcc_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function _onReceive(Message calldata inbound) internal override {
         lastPeer = msg.sender;
@@ -31,11 +31,11 @@ contract EchoAgent is Agent {
 contract AgentTest is Test {
     EchoAgent internal alice;
     EchoAgent internal bob;
-    address internal acc = address(0xACC);
+    address internal relay = address(0x11EE);
 
     function setUp() public {
-        alice = new EchoAgent(acc);
-        bob = new EchoAgent(acc);
+        alice = new EchoAgent(relay);
+        bob = new EchoAgent(relay);
     }
 
     function _nativeRequest(bytes32 conv) internal pure returns (Message memory m) {
@@ -72,7 +72,7 @@ contract AgentTest is Test {
         bob.handle(req);
     }
 
-    function test_nonAccCannotSetLogicalSender() public {
+    function test_untrustedCannotSetLogicalSender() public {
         Message memory req = _nativeRequest(keccak256("c3"));
         req.logicalSender = keccak256("alice-logical");
         vm.prank(address(alice));
@@ -80,25 +80,32 @@ contract AgentTest is Test {
         bob.handle(req);
     }
 
-    function test_accMustSetLogicalSender() public {
+    function test_relayMustSetLogicalSender() public {
         Message memory req = _nativeRequest(keccak256("c4"));
-        vm.prank(acc);
-        vm.expectRevert(Agent.AccMustSetLogicalSender.selector);
+        vm.prank(relay);
+        vm.expectRevert(Agent.RelayMustSetLogicalSender.selector);
         bob.handle(req);
     }
 
-    function test_accWithOpaqueLogicalSender() public {
+    function test_relayWithOpaqueLogicalSender() public {
         Message memory req = _nativeRequest(keccak256("c5"));
         req.logicalSender = keccak256("alice-logical");
-        vm.prank(acc);
+        vm.prank(relay);
         bob.handle(req);
-        assertEq(bob.lastPeer(), acc);
+        assertEq(bob.lastPeer(), relay);
     }
 
-    function test_strangerCannotCallReply() public {
+    function test_replySelectorAbsent() public {
         Message memory req = _nativeRequest(keccak256("c6"));
-        vm.expectRevert(Agent.OnlySelf.selector);
-        bob.reply(address(alice), req);
+        (bool ok,) = address(bob)
+            .call(
+                abi.encodeWithSignature(
+                    "reply(address,(uint8,uint8,bytes32,bytes32,bytes32,uint64,bytes32,bytes))",
+                    address(alice),
+                    req
+                )
+            );
+        assertFalse(ok);
     }
 
     function test_replyConversationMismatchReverts() public {
@@ -117,7 +124,7 @@ contract AgentTest is Test {
         m.handle(req);
     }
 
-    function test_trustedAccZeroRejectsLogicalSender() public {
+    function test_trustedRelayZeroRejectsLogicalSender() public {
         EchoAgent nativeOnly = new EchoAgent(address(0));
         Message memory req = _nativeRequest(keccak256("c9"));
         req.logicalSender = keccak256("spoof");
@@ -173,7 +180,7 @@ contract AgentTest is Test {
         assertEq(writes.length, 0);
     }
 
-    function testFuzz_nonAccCannotSetLogicalSender(bytes32 logicalSender) public {
+    function testFuzz_untrustedCannotSetLogicalSender(bytes32 logicalSender) public {
         vm.assume(logicalSender != bytes32(0));
         Message memory req = _nativeRequest(keccak256("fuzz-ls"));
         req.logicalSender = logicalSender;
@@ -184,7 +191,7 @@ contract AgentTest is Test {
 }
 
 contract MismatchAgent is Agent {
-    constructor(address trustedAcc_) Agent(trustedAcc_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function _onReceive(Message calldata inbound) internal override {
         Message memory outbound;
@@ -199,7 +206,7 @@ contract RecordingAgent is Agent {
     uint8 public lastProtocol;
     uint8 public lastPerformative;
 
-    constructor(address trustedAcc_) Agent(trustedAcc_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function _onReceive(Message calldata inbound) internal override {
         lastProtocol = inbound.protocol;
@@ -208,7 +215,7 @@ contract RecordingAgent is Agent {
 }
 
 contract ReplyWithMismatchAgent is Agent {
-    constructor(address trustedAcc_) Agent(trustedAcc_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function _onReceive(Message calldata inbound) internal override {
         Message memory outbound;

@@ -11,7 +11,7 @@ contract AgentInvariantTest is Test {
         targetContract(address(handler));
         bytes4[] memory sels = new bytes4[](2);
         sels[0] = AgentHandler.handleNative.selector;
-        sels[1] = AgentHandler.handleWithAcc.selector;
+        sels[1] = AgentHandler.handleWithRelay.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: sels}));
     }
 

@@ -7,18 +7,18 @@ import {Message} from "../../src/core/Message.sol";
 /// @dev Random handle attempts against a storage-free Agent (A-I1..I5).
 contract AgentHandler is Test {
     Agent public native;
-    Agent public withAcc;
-    address public acc = address(0xACC);
+    Agent public withRelay;
+    address public relay = address(0x11EE);
     bytes internal constant NEEDLE =
         hex"c0ffee01c0ffee02c0ffee03c0ffee04c0ffee05c0ffee06c0ffee07c0ffee08";
 
     uint256 public nativeAcceptedWithLogical;
-    uint256 public accAcceptedAsNative;
+    uint256 public relayAcceptedAsNative;
     uint256 public protocolZeroIdAccepted;
 
     constructor() {
         native = new Agent(address(0));
-        withAcc = new Agent(acc);
+        withRelay = new Agent(relay);
     }
 
     function handleNative(
@@ -40,23 +40,24 @@ contract AgentHandler is Test {
         } catch {}
     }
 
-    function handleWithAcc(
-        bool asAcc,
+    function handleWithRelay(
+        bool asRelay,
         uint8 protocol,
         bytes32 conversationId,
         bytes32 logicalSender,
         uint8 contentLen
     ) external {
         Message memory m = _msg(protocol, conversationId, logicalSender, contentLen);
-        address caller =
-            asAcc ? acc : address(uint160(uint256(keccak256(abi.encode(asAcc, protocol))) | 1));
+        address caller = asRelay
+            ? relay
+            : address(uint160(uint256(keccak256(abi.encode(asRelay, protocol))) | 1));
         vm.prank(caller);
-        try withAcc.handle(m) {
-            if (!asAcc && logicalSender != bytes32(0)) {
+        try withRelay.handle(m) {
+            if (!asRelay && logicalSender != bytes32(0)) {
                 nativeAcceptedWithLogical++;
             }
-            if (asAcc && logicalSender == bytes32(0)) {
-                accAcceptedAsNative++;
+            if (asRelay && logicalSender == bytes32(0)) {
+                relayAcceptedAsNative++;
             }
             if (protocol != 0 && conversationId == bytes32(0)) {
                 protocolZeroIdAccepted++;
@@ -66,10 +67,10 @@ contract AgentHandler is Test {
 
     function assertAgentInvariants() external view {
         assertEq(nativeAcceptedWithLogical, 0, "A-I1/I3");
-        assertEq(accAcceptedAsNative, 0, "A-I2");
+        assertEq(relayAcceptedAsNative, 0, "A-I2");
         assertEq(protocolZeroIdAccepted, 0, "A-I4");
         _noNeedle(address(native));
-        _noNeedle(address(withAcc));
+        _noNeedle(address(withRelay));
     }
 
     function _msg(uint8 protocol, bytes32 conversationId, bytes32 logicalSender, uint8 contentLen)

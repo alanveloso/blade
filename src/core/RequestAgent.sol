@@ -38,7 +38,7 @@ contract RequestAgent is Agent {
 
     event RequestAdvanced(bytes32 indexed conversationId, uint8 phase, uint8 performative);
 
-    constructor(address trustedAcc_) Agent(trustedAcc_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function requestStatus(bytes32 conversationId) external view returns (Status memory) {
         return _request[conversationId];
@@ -62,7 +62,7 @@ contract RequestAgent is Agent {
         emit RequestAdvanced(
             outbound.conversationId, uint8(RequestPhase.Requested), outbound.performative
         );
-        this.reply(to, outbound);
+        _send(to, outbound);
     }
 
     function _onInbound(Message calldata message) internal override {
@@ -126,7 +126,7 @@ contract RequestAgent is Agent {
             }
             return;
         }
-        if (msg.sender != trustedAcc || message.logicalSender != s.logicalPeer) {
+        if (msg.sender != trustedRelay || message.logicalSender != s.logicalPeer) {
             revert UnexpectedPeer();
         }
     }

@@ -7,7 +7,7 @@ import {Performative} from "../src/core/Performative.sol";
 
 /// @dev Test/application wrappers. Production decision primitives stay internal.
 contract ExposedContractNetManager is ContractNetManager {
-    constructor(address trustedAcc_) ContractNetManager(trustedAcc_) {}
+    constructor(address trustedRelay_) ContractNetManager(trustedRelay_) {}
 
     function cfp(address[] calldata participants, Message memory message) external {
         _cfp(participants, message);
@@ -24,7 +24,7 @@ contract ExposedContractNetManager is ContractNetManager {
 }
 
 contract ExposedContractNetParticipant is ContractNetParticipant {
-    constructor(address trustedAcc_) ContractNetParticipant(trustedAcc_) {}
+    constructor(address trustedRelay_) ContractNetParticipant(trustedRelay_) {}
 
     function respond(Message calldata inbound, address to, Message memory outbound) external {
         _respond(inbound, to, outbound);

@@ -9,11 +9,10 @@ import {Message, MessageLib} from "./Message.sol";
 contract Agent is IAgent {
     using MessageLib for Message;
 
-    address public immutable trustedAcc;
+    address public immutable trustedRelay;
 
-    error AccMustSetLogicalSender();
+    error RelayMustSetLogicalSender();
     error UnauthorizedLogicalSender();
-    error OnlySelf();
     error ConversationMismatch();
     error ReplyWithMismatch();
 
@@ -29,8 +28,8 @@ contract Agent is IAgent {
         bytes content
     );
 
-    constructor(address trustedAcc_) {
-        trustedAcc = trustedAcc_;
+    constructor(address trustedRelay_) {
+        trustedRelay = trustedRelay_;
     }
 
     /// @dev Named `handle` because Solidity reserves `receive` for the ETH receive function.
@@ -52,11 +51,8 @@ contract Agent is IAgent {
         _onReceive(message);
     }
 
-    /// @dev Only this contract may send (via `this.reply`), so `msg.sender` at the peer is this Agent.
-    function reply(address to, Message memory message) public {
-        if (msg.sender != address(this)) {
-            revert OnlySelf();
-        }
+    /// @dev Native outbound: `logicalSender` must be 0. Peer sees `msg.sender == address(this)`.
+    function _send(address to, Message memory message) internal virtual {
         if (message.logicalSender != bytes32(0)) {
             revert UnauthorizedLogicalSender();
         }
@@ -75,13 +71,13 @@ contract Agent is IAgent {
         if (inbound.replyWith != bytes32(0) && outbound.inReplyTo != inbound.replyWith) {
             revert ReplyWithMismatch();
         }
-        this.reply(to, outbound);
+        _send(to, outbound);
     }
 
     function _authenticate(Message calldata message) internal view {
-        if (trustedAcc != address(0) && msg.sender == trustedAcc) {
+        if (trustedRelay != address(0) && msg.sender == trustedRelay) {
             if (message.logicalSender == bytes32(0)) {
-                revert AccMustSetLogicalSender();
+                revert RelayMustSetLogicalSender();
             }
             return;
         }

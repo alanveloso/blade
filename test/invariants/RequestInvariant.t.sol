@@ -14,7 +14,7 @@ contract RequestInvariantTest is Test {
         sels[1] = RequestHandler.openBobToAlice.selector;
         sels[2] = RequestHandler.participantRespond.selector;
         sels[3] = RequestHandler.wrongPeerHandle.selector;
-        sels[4] = RequestHandler.accWrongLogical.selector;
+        sels[4] = RequestHandler.relayWrongLogical.selector;
         sels[5] = RequestHandler.nativeLogicalSpoof.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: sels}));
     }

@@ -8,7 +8,7 @@ import {Protocol} from "../src/core/Protocol.sol";
 import {Agent} from "../src/core/Agent.sol";
 
 contract ScriptedRequestAgent is RequestAgent {
-    constructor(address trustedAcc_) RequestAgent(trustedAcc_) {}
+    constructor(address trustedRelay_) RequestAgent(trustedRelay_) {}
 
     function startRequest(address to, Message memory outbound) external {
         _startRequest(to, outbound);
@@ -22,15 +22,15 @@ contract ScriptedRequestAgent is RequestAgent {
 contract RequestTest is Test {
     ScriptedRequestAgent internal alice;
     ScriptedRequestAgent internal bob;
-    Agent internal accSink;
+    Agent internal relaySink;
 
     bytes internal constant UNIQUE_CONTENT =
         hex"c0ffee01c0ffee02c0ffee03c0ffee04c0ffee05c0ffee06c0ffee07c0ffee08";
 
     function setUp() public {
-        accSink = new Agent(address(0));
-        alice = new ScriptedRequestAgent(address(accSink));
-        bob = new ScriptedRequestAgent(address(accSink));
+        relaySink = new Agent(address(0));
+        alice = new ScriptedRequestAgent(address(relaySink));
+        bob = new ScriptedRequestAgent(address(relaySink));
     }
 
     function _requestAt(bytes32 conversationId) internal pure returns (Message memory m) {
@@ -223,14 +223,14 @@ contract RequestTest is Test {
         bob.respond(req, address(alice), _replyAct(req, Performative.Agree));
     }
 
-    function test_accWrongLogicalSenderReverts() public {
+    function test_relayWrongLogicalSenderReverts() public {
         Message memory req = _request();
         req.logicalSender = keccak256("alice-logical");
-        vm.prank(address(accSink));
+        vm.prank(address(relaySink));
         bob.handle(req);
         Message memory inf = _replyAct(req, Performative.Inform);
         inf.logicalSender = keccak256("eve-logical");
-        vm.prank(address(accSink));
+        vm.prank(address(relaySink));
         vm.expectRevert(RequestAgent.UnexpectedPeer.selector);
         bob.handle(inf);
         _assertActive(
@@ -238,7 +238,7 @@ contract RequestTest is Test {
             req.conversationId,
             RequestPhase.Requested,
             RequestRole.Participant,
-            address(accSink),
+            address(relaySink),
             keccak256("alice-logical")
         );
     }
@@ -335,20 +335,20 @@ contract RequestTest is Test {
     function test_unexpectedPeerReverts() public {
         Message memory req = _request();
         alice.startRequest(address(bob), req);
-        ScriptedRequestAgent charlie = new ScriptedRequestAgent(address(accSink));
+        ScriptedRequestAgent charlie = new ScriptedRequestAgent(address(relaySink));
         vm.prank(address(charlie));
         vm.expectRevert(RequestAgent.UnexpectedPeer.selector);
         bob.handle(_replyAct(req, Performative.Inform));
     }
 
-    function test_accRequestThenRefuse() public {
+    function test_relayRequestThenRefuse() public {
         Message memory req = _request();
         req.logicalSender = keccak256("external-alice");
-        vm.prank(address(accSink));
+        vm.prank(address(relaySink));
         bob.handle(req);
         assertEq(uint8(bob.requestStatus(req.conversationId).phase), uint8(RequestPhase.Requested));
         req.logicalSender = bytes32(0);
-        bob.respond(req, address(accSink), _replyAct(req, Performative.Refuse));
+        bob.respond(req, address(relaySink), _replyAct(req, Performative.Refuse));
         _assertCleared(bob, req.conversationId);
     }
 

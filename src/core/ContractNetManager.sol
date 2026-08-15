@@ -26,7 +26,7 @@ contract ContractNetManager is Agent {
         bytes32 indexed conversationId, address indexed participant, uint8 slot, uint8 performative
     );
 
-    constructor(address trustedAcc_) Agent(trustedAcc_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function conversation(bytes32 conversationId) external view returns (Conversation memory) {
         return _net[conversationId];
@@ -60,7 +60,10 @@ contract ContractNetManager is Agent {
         }
         c.replyBy = message.replyBy;
         c.evaluated = false;
+        // `n > type(uint32).max` is unreachable: this transaction delivers one `handle` per invitee.
+        // forge-lint: disable-next-line(unsafe-typecast)
         c.live = uint32(n);
+        // forge-lint: disable-next-line(unsafe-typecast)
         c.invited = uint32(n);
         for (uint256 i = 0; i < n; i++) {
             address p = participants[i];
@@ -70,7 +73,7 @@ contract ContractNetManager is Agent {
             );
         }
         for (uint256 i = 0; i < n; i++) {
-            this.reply(participants[i], message);
+            _send(participants[i], message);
         }
     }
 
@@ -145,10 +148,10 @@ contract ContractNetManager is Agent {
         _maybeClear(conversationId);
 
         for (uint256 i = 0; i < reject.length; i++) {
-            this.reply(reject[i], _act(conversationId, uint8(Performative.RejectProposal), replyBy));
+            _send(reject[i], _act(conversationId, uint8(Performative.RejectProposal), replyBy));
         }
         for (uint256 i = 0; i < accept.length; i++) {
-            this.reply(accept[i], _act(conversationId, uint8(Performative.AcceptProposal), replyBy));
+            _send(accept[i], _act(conversationId, uint8(Performative.AcceptProposal), replyBy));
         }
     }
 
@@ -181,7 +184,7 @@ contract ContractNetManager is Agent {
                     ContractNetLib.SLOT_NONE,
                     uint8(Performative.RejectProposal)
                 );
-                this.reply(
+                _send(
                     msg.sender,
                     _act(message.conversationId, uint8(Performative.RejectProposal), c.replyBy)
                 );

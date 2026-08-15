@@ -35,7 +35,7 @@ library MessageLib {
         return Protocol(m.protocol);
     }
 
-    /// @dev `logicalSender == 0` means native (identity = transport). Non-zero is set only by the trusted caller.
+    /// @dev `logicalSender == 0` means native (identity = transport). Non-zero is set only by the trusted relay.
     function isNative(Message memory m) internal pure returns (bool) {
         return m.logicalSender == bytes32(0);
     }

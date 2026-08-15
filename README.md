@@ -9,9 +9,13 @@ It implements **selected FIPA interaction semantics**. It does not claim complet
 | Type | Role |
 |---|---|
 | `Message` | Compact on-chain ACL message |
-| `Agent` | Inbound `handle`; outbound `reply` |
-| `RequestAgent` | Request protocol |
-| `ContractNetManager` / `ContractNetParticipant` | Contract Net protocol |
+| `Agent` / `IAgent` | Inbound `handle`; outbound `_send` / `_reply` |
+| `RequestAgent` | Request protocol (`_startRequest`) |
+| `ContractNetManager` / `ContractNetParticipant` | Contract Net (`_cfp`, `_evaluate`, `_respond`) |
+
+Application contracts inherit these types and expose their own external methods around the internal primitives. Protocol selection and authorization are application concerns, not Core.
+
+Minimal patterns: `examples/RequestExample.sol`, `examples/ContractNetExample.sol`.
 
 ## Requirements
 
