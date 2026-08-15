@@ -343,7 +343,7 @@ contract RequestTest is Test {
 
     function test_accRequestThenRefuse() public {
         Message memory req = _request();
-        req.logicalSender = keccak256("jade-alice");
+        req.logicalSender = keccak256("external-alice");
         vm.prank(address(accSink));
         bob.handle(req);
         assertEq(uint8(bob.requestStatus(req.conversationId).phase), uint8(RequestPhase.Requested));

@@ -74,7 +74,7 @@ contract AgentTest is Test {
 
     function test_nonAccCannotSetLogicalSender() public {
         Message memory req = _nativeRequest(keccak256("c3"));
-        req.logicalSender = keccak256("alice@jade");
+        req.logicalSender = keccak256("alice-logical");
         vm.prank(address(alice));
         vm.expectRevert(Agent.UnauthorizedLogicalSender.selector);
         bob.handle(req);
@@ -89,7 +89,7 @@ contract AgentTest is Test {
 
     function test_accWithOpaqueLogicalSender() public {
         Message memory req = _nativeRequest(keccak256("c5"));
-        req.logicalSender = keccak256("alice@jade");
+        req.logicalSender = keccak256("alice-logical");
         vm.prank(acc);
         bob.handle(req);
         assertEq(bob.lastPeer(), acc);
