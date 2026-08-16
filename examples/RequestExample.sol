@@ -2,13 +2,14 @@
 pragma solidity ^0.8.26;
 
 import {RequestAgent} from "../src/core/RequestAgent.sol";
+import {Agent} from "../src/core/Agent.sol";
 import {Message} from "../src/core/Message.sol";
 import {Performative} from "../src/core/Performative.sol";
 import {Protocol} from "../src/core/Protocol.sol";
 
 /// @dev Application wrapper: Core keeps `_startRequest` internal.
 contract ExampleRequester is RequestAgent {
-    constructor(address trustedRelay_) RequestAgent(trustedRelay_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function request(address participant, bytes32 conversationId, bytes calldata content) external {
         Message memory outbound;
@@ -20,9 +21,9 @@ contract ExampleRequester is RequestAgent {
     }
 }
 
-/// @dev Application policy: always inform-done. Authorization is not a Core concern.
+/// @dev Application policy: always inform-done. Authorization policy belongs to the application.
 contract ExampleParticipant is RequestAgent {
-    constructor(address trustedRelay_) RequestAgent(trustedRelay_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function _onReceive(Message calldata inbound) internal override {
         if (inbound.performative != uint8(Performative.Request)) {

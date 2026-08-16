@@ -2,13 +2,13 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {ContractNetLib} from "../src/core/ContractNetLib.sol";
-import {ContractNetManager} from "../src/core/ContractNetManager.sol";
-import {ContractNetParticipant} from "../src/core/ContractNetParticipant.sol";
 import {Message} from "../src/core/Message.sol";
 import {Performative} from "../src/core/Performative.sol";
 import {Protocol} from "../src/core/Protocol.sol";
 import {
     AutoCompleteParticipant,
+    BareContractNetManager,
+    BareContractNetParticipant,
     DecisionRecordingParticipant,
     ExposedContractNetManager,
     ExposedContractNetParticipant,
@@ -668,7 +668,7 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_bareManagerDecisionSelectorsAbsent() public {
-        ContractNetManager bare = new ContractNetManager(address(0));
+        BareContractNetManager bare = new BareContractNetManager(address(0));
         address[] memory parts = _one(address(p1));
         Message memory m = _cfp(keccak256("bare"), _deadline());
         (bool okCfp,) = address(bare)
@@ -695,7 +695,7 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_bareParticipantRespondSelectorAbsent() public {
-        ContractNetParticipant bare = new ContractNetParticipant(address(0));
+        BareContractNetParticipant bare = new BareContractNetParticipant(address(0));
         Message memory m = _cfp(keccak256("bare-p"), _deadline());
         (bool ok,) = address(bare)
             .call(

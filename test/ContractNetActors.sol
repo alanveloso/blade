@@ -2,12 +2,13 @@ pragma solidity ^0.8.26;
 
 import {ContractNetManager} from "../src/core/ContractNetManager.sol";
 import {ContractNetParticipant} from "../src/core/ContractNetParticipant.sol";
+import {Agent} from "../src/core/Agent.sol";
 import {Message} from "../src/core/Message.sol";
 import {Performative} from "../src/core/Performative.sol";
 
 /// @dev Test/application wrappers. Production decision primitives stay internal.
 contract ExposedContractNetManager is ContractNetManager {
-    constructor(address trustedRelay_) ContractNetManager(trustedRelay_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function cfp(address[] calldata participants, Message memory message) external {
         _cfp(participants, message);
@@ -24,7 +25,7 @@ contract ExposedContractNetManager is ContractNetManager {
 }
 
 contract ExposedContractNetParticipant is ContractNetParticipant {
-    constructor(address trustedRelay_) ContractNetParticipant(trustedRelay_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function respond(Message calldata inbound, address to, Message memory outbound) external {
         _respond(inbound, to, outbound);
@@ -101,4 +102,14 @@ contract DecisionRecordingParticipant is ExposedContractNetParticipant {
             lastDecisionReplyBy = inbound.replyBy;
         }
     }
+}
+
+/// @dev Deployable Core role with no application `cfp`/`evaluate` selectors.
+contract BareContractNetManager is ContractNetManager {
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
+}
+
+/// @dev Deployable Core role with no application `respond` selector.
+contract BareContractNetParticipant is ContractNetParticipant {
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 }

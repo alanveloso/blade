@@ -8,7 +8,7 @@ import {Protocol} from "../src/core/Protocol.sol";
 import {Agent} from "../src/core/Agent.sol";
 
 contract ScriptedRequestAgent is RequestAgent {
-    constructor(address trustedRelay_) RequestAgent(trustedRelay_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function startRequest(address to, Message memory outbound) external {
         _startRequest(to, outbound);

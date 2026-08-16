@@ -3,13 +3,14 @@ pragma solidity ^0.8.26;
 
 import {ContractNetManager} from "../src/core/ContractNetManager.sol";
 import {ContractNetParticipant} from "../src/core/ContractNetParticipant.sol";
+import {Agent} from "../src/core/Agent.sol";
 import {Message} from "../src/core/Message.sol";
 import {Performative} from "../src/core/Performative.sol";
 import {Protocol} from "../src/core/Protocol.sol";
 
 /// @dev Application wrapper around `_cfp` / `_evaluate`. Selection policy lives here, not in Core.
 contract ExampleManager is ContractNetManager {
-    constructor(address trustedRelay_) ContractNetManager(trustedRelay_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function cfp(address[] calldata participants, bytes32 conversationId, uint64 replyBy) external {
         Message memory message;
@@ -32,7 +33,7 @@ contract ExampleManager is ContractNetManager {
 
 /// @dev Application wrapper around `_respond`. Whether to propose is an application decision.
 contract ExampleParticipant is ContractNetParticipant {
-    constructor(address trustedRelay_) ContractNetParticipant(trustedRelay_) {}
+    constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
     function propose(Message calldata inbound, address manager) external {
         Message memory outbound;

@@ -13,9 +13,17 @@ It implements **selected FIPA interaction semantics**. It does not claim complet
 | `RequestAgent` | Request protocol (`_startRequest`) |
 | `ContractNetManager` / `ContractNetParticipant` | Contract Net (`_cfp`, `_evaluate`, `_respond`) |
 
-Application contracts inherit these types and expose their own external methods around the internal primitives. Protocol selection and authorization are application concerns, not Core.
+Application contracts inherit these types and expose their own external methods around the internal primitives. Protocol selection is an application concern.
 
-Minimal patterns: `examples/RequestExample.sol`, `examples/ContractNetExample.sol`.
+`Agent.handle` authenticates the caller, then calls `_authorizeInbound` (default: allow all) **before** any Request or Contract Net state mutation. Applications may override that hook; the Core does not impose an owner.
+
+Protocol role types are abstract capabilities. A leaf agent initializes `Agent` once. One blockchain-resident contract may compose Request, Contract Net manager, and Contract Net participant by inheriting all three and routing inbound messages through the capability handlers (see `examples/CompositeExample.sol`). The composed leaf does not copy protocol FSMs; it only chooses which handler owns the message, then `Agent._reply` runs once.
+
+Request and Contract Net maintain independent protocol-state namespaces, so protocol state does not collide even if identifiers coincide. Applications should nevertheless use distinct conversation identifiers for distinct interactions.
+
+Being Contract Net **manager and participant of the same Contract Net conversation** is unsupported and is not dual-routed: opening a manager CFP while a participant session exists for that id reverts; inbound CN on a live manager conversation is handled only as manager (a colliding participant CFP reverts). Internal revert selectors on invalid composed paths are not claimed equivalent to every standalone role.
+
+Minimal patterns: `examples/RequestExample.sol`, `examples/ContractNetExample.sol`, `examples/CompositeExample.sol`.
 
 ## Requirements
 
