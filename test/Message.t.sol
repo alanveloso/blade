@@ -40,7 +40,7 @@ contract MessageTest is Test {
         m.validate();
     }
 
-    function test_nonZeroLogicalSenderIsOpaque() public pure {
+    function test_relayReservedLogicalSenderIsNonZeroOpaque() public pure {
         Message memory m = _base();
         m.logicalSender = keccak256("not-an-address-not-a-fipa-name");
         assertFalse(m.isNative());

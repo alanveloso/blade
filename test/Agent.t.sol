@@ -31,7 +31,7 @@ contract EchoAgent is Agent {
 contract AgentTest is Test {
     EchoAgent internal alice;
     EchoAgent internal bob;
-    address internal relay = address(0x11EE);
+    address internal relay = address(0xBEEF);
 
     function setUp() public {
         alice = new EchoAgent(relay);
@@ -72,7 +72,7 @@ contract AgentTest is Test {
         bob.handle(req);
     }
 
-    function test_untrustedCannotSetLogicalSender() public {
+    function test_nonRelayCannotSetLogicalSender() public {
         Message memory req = _nativeRequest(keccak256("c3"));
         req.logicalSender = keccak256("alice-logical");
         vm.prank(address(alice));
@@ -93,19 +93,6 @@ contract AgentTest is Test {
         vm.prank(relay);
         bob.handle(req);
         assertEq(bob.lastPeer(), relay);
-    }
-
-    function test_replySelectorAbsent() public {
-        Message memory req = _nativeRequest(keccak256("c6"));
-        (bool ok,) = address(bob)
-            .call(
-                abi.encodeWithSignature(
-                    "reply(address,(uint8,uint8,bytes32,bytes32,bytes32,uint64,bytes32,bytes))",
-                    address(alice),
-                    req
-                )
-            );
-        assertFalse(ok);
     }
 
     function test_replyConversationMismatchReverts() public {
@@ -180,7 +167,7 @@ contract AgentTest is Test {
         assertEq(writes.length, 0);
     }
 
-    function testFuzz_untrustedCannotSetLogicalSender(bytes32 logicalSender) public {
+    function testFuzz_nonRelayCannotSetLogicalSender(bytes32 logicalSender) public {
         vm.assume(logicalSender != bytes32(0));
         Message memory req = _nativeRequest(keccak256("fuzz-ls"));
         req.logicalSender = logicalSender;

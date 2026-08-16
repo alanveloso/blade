@@ -21,10 +21,16 @@ struct Message {
 library MessageLib {
     error ProtocolRequiresConversationId();
 
-    function validate(Message memory m) internal pure {
-        if (m.protocol != uint8(Protocol.None) && m.conversationId == bytes32(0)) {
+    /// @dev Field-only validation avoids copying a calldata `Message` (and dynamic `content`) to memory.
+    function validateFields(uint8 protocol, bytes32 conversationId) internal pure {
+        if (protocol != uint8(Protocol.None) && conversationId == bytes32(0)) {
             revert ProtocolRequiresConversationId();
         }
+    }
+
+    /// @dev Memory convenience wrapper for application-created outbound messages.
+    function validate(Message memory m) internal pure {
+        validateFields(m.protocol, m.conversationId);
     }
 
     function performativeOf(Message memory m) internal pure returns (Performative) {
@@ -35,7 +41,7 @@ library MessageLib {
         return Protocol(m.protocol);
     }
 
-    /// @dev `logicalSender == 0` means native (identity = transport). Non-zero is set only by the trusted relay.
+    /// @dev `logicalSender == 0` means native (identity = transport). Non-zero is set only by the trusted caller.
     function isNative(Message memory m) internal pure returns (bool) {
         return m.logicalSender == bytes32(0);
     }

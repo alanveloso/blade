@@ -7,10 +7,9 @@ import {Message} from "./Message.sol";
 import {Performative} from "./Performative.sol";
 import {Protocol} from "./Protocol.sol";
 
-/// @title FIPA Contract Net initiator. Does not store `Message`/`content`.
+/// @title Manager role for the supported FIPA Contract Net interaction subset.
+/// @dev Does not store a full `Message` or `content`.
 contract ContractNetManager is Agent {
-    using ContractNetLib for Message;
-
     /// @dev Root record. Slots: conversationId => participant => Invited|Proposed|Accepted.
     struct Conversation {
         uint64 replyBy;
@@ -37,6 +36,7 @@ contract ContractNetManager is Agent {
     }
 
     /// @dev Explicit 1:N CFP. Same `conversationId` on every `handle`. Application decision primitive.
+    /// Duplicate detection reuses the per-participant mapping instead of an O(N^2) array scan.
     function _cfp(address[] calldata participants, Message memory message) internal {
         ContractNetLib.requireCfp(message);
         uint256 n = participants.length;
@@ -47,37 +47,34 @@ contract ContractNetManager is Agent {
         if (c.invited != 0 || c.live != 0) {
             revert ContractNetLib.InvalidTransition();
         }
+
+        // Validate and stage membership in one O(N) pass. Any later revert rolls back all slots/events.
         for (uint256 i = 0; i < n; i++) {
             address p = participants[i];
             if (p == address(0) || p.code.length == 0) {
                 revert ContractNetLib.InvalidParticipant(p);
             }
-            for (uint256 j = 0; j < i; j++) {
-                if (participants[j] == p) {
-                    revert ContractNetLib.DuplicateParticipant();
-                }
+            if (_slot[message.conversationId][p] != ContractNetLib.SLOT_NONE) {
+                revert ContractNetLib.DuplicateParticipant();
             }
-        }
-        c.replyBy = message.replyBy;
-        c.evaluated = false;
-        // `n > type(uint32).max` is unreachable: this transaction delivers one `handle` per invitee.
-        // forge-lint: disable-next-line(unsafe-typecast)
-        c.live = uint32(n);
-        // forge-lint: disable-next-line(unsafe-typecast)
-        c.invited = uint32(n);
-        for (uint256 i = 0; i < n; i++) {
-            address p = participants[i];
             _slot[message.conversationId][p] = ContractNetLib.SLOT_INVITED;
             emit ContractNetSlot(
                 message.conversationId, p, ContractNetLib.SLOT_INVITED, uint8(Performative.Cfp)
             );
         }
+
+        c.replyBy = message.replyBy;
+        c.evaluated = false;
+        c.live = uint32(n);
+        c.invited = uint32(n);
+
         for (uint256 i = 0; i < n; i++) {
             _send(participants[i], message);
         }
     }
 
     /// @dev Tx-triggered finalization after `replyBy`. CEI: all checks/effects, then participant `handle`s.
+    /// Duplicate/overlap detection is implicit in state transitions, avoiding O(N^2) list scans.
     function _evaluate(
         bytes32 conversationId,
         address[] calldata accept,
@@ -93,65 +90,55 @@ contract ContractNetManager is Agent {
         }
         ContractNetLib.requireWindowClosed(c.replyBy);
 
-        ContractNetLib.requireNoDuplicates(accept);
-        ContractNetLib.requireNoDuplicates(reject);
-        ContractNetLib.requireNoDuplicates(silent);
-        ContractNetLib.requireDisjoint(accept, reject);
-        ContractNetLib.requireDisjoint(accept, silent);
-        ContractNetLib.requireDisjoint(reject, silent);
-
         if (accept.length + reject.length + silent.length != c.live) {
             revert ContractNetLib.IncompleteEvaluation();
         }
+
+        // Mutating while validating makes duplicates and overlaps fail naturally: a second occurrence
+        // no longer has the required pre-evaluation slot. Reverts restore the entire transaction.
         for (uint256 i = 0; i < silent.length; i++) {
-            if (_slot[conversationId][silent[i]] != ContractNetLib.SLOT_INVITED) {
+            address p = silent[i];
+            if (_slot[conversationId][p] != ContractNetLib.SLOT_INVITED) {
                 revert ContractNetLib.InvalidTransition();
             }
+            delete _slot[conversationId][p];
         }
         for (uint256 i = 0; i < reject.length; i++) {
-            if (_slot[conversationId][reject[i]] != ContractNetLib.SLOT_PROPOSED) {
+            address p = reject[i];
+            if (_slot[conversationId][p] != ContractNetLib.SLOT_PROPOSED) {
                 revert ContractNetLib.InvalidTransition();
             }
+            delete _slot[conversationId][p];
+            emit ContractNetSlot(
+                conversationId, p, ContractNetLib.SLOT_NONE, uint8(Performative.RejectProposal)
+            );
         }
         for (uint256 i = 0; i < accept.length; i++) {
-            if (_slot[conversationId][accept[i]] != ContractNetLib.SLOT_PROPOSED) {
+            address p = accept[i];
+            if (_slot[conversationId][p] != ContractNetLib.SLOT_PROPOSED) {
                 revert ContractNetLib.InvalidTransition();
             }
+            _slot[conversationId][p] = ContractNetLib.SLOT_ACCEPTED;
+            emit ContractNetSlot(
+                conversationId, p, ContractNetLib.SLOT_ACCEPTED, uint8(Performative.AcceptProposal)
+            );
         }
 
-        uint64 replyBy = c.replyBy;
+        // One logical live-count update instead of one storage write per rejected/silent participant.
+        uint32 accepted = uint32(accept.length);
+        if (c.live != accepted) {
+            c.live = accepted;
+        }
         c.evaluated = true;
-        for (uint256 i = 0; i < silent.length; i++) {
-            delete _slot[conversationId][silent[i]];
-            c.live -= 1;
-        }
-        for (uint256 i = 0; i < reject.length; i++) {
-            delete _slot[conversationId][reject[i]];
-            c.live -= 1;
-            emit ContractNetSlot(
-                conversationId,
-                reject[i],
-                ContractNetLib.SLOT_NONE,
-                uint8(Performative.RejectProposal)
-            );
-        }
-        for (uint256 i = 0; i < accept.length; i++) {
-            _slot[conversationId][accept[i]] = ContractNetLib.SLOT_ACCEPTED;
-            emit ContractNetSlot(
-                conversationId,
-                accept[i],
-                ContractNetLib.SLOT_ACCEPTED,
-                uint8(Performative.AcceptProposal)
-            );
-        }
-        // After effects, live == accept.length. Callbacks may reduce live further (M30).
         _maybeClear(conversationId);
 
         for (uint256 i = 0; i < reject.length; i++) {
-            _send(reject[i], _act(conversationId, uint8(Performative.RejectProposal), replyBy));
+            // The CFP deadline governs proposal collection; it is not copied into the later
+            // accept/reject decision message.
+            _send(reject[i], _act(conversationId, uint8(Performative.RejectProposal), 0));
         }
         for (uint256 i = 0; i < accept.length; i++) {
-            _send(accept[i], _act(conversationId, uint8(Performative.AcceptProposal), replyBy));
+            _send(accept[i], _act(conversationId, uint8(Performative.AcceptProposal), 0));
         }
     }
 
@@ -185,8 +172,7 @@ contract ContractNetManager is Agent {
                     uint8(Performative.RejectProposal)
                 );
                 _send(
-                    msg.sender,
-                    _act(message.conversationId, uint8(Performative.RejectProposal), c.replyBy)
+                    msg.sender, _act(message.conversationId, uint8(Performative.RejectProposal), 0)
                 );
                 _maybeClear(message.conversationId);
                 return;
@@ -216,9 +202,6 @@ contract ContractNetManager is Agent {
             return;
         }
         if (act == Performative.NotUnderstood) {
-            if (slot == ContractNetLib.SLOT_NONE) {
-                revert ContractNetLib.UnexpectedPeer();
-            }
             delete _slot[message.conversationId][msg.sender];
             c.live -= 1;
             emit ContractNetSlot(
@@ -249,10 +232,6 @@ contract ContractNetManager is Agent {
         Conversation storage c = _net[conversationId];
         if (c.live != 0) {
             return;
-        }
-        if (!c.evaluated && c.invited != 0) {
-            // Still before/without evaluation only if every invited already refused/NU/late-rejected.
-            // No Proposed/Accepted remain; nothing to evaluate.
         }
         delete _net[conversationId];
     }

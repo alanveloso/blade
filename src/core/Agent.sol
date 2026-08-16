@@ -4,11 +4,10 @@ pragma solidity ^0.8.26;
 import {IAgent} from "./IAgent.sol";
 import {Message, MessageLib} from "./Message.sol";
 
-/// @title Generic on-chain agent.
-/// @dev Transport sender is `msg.sender`; receiver is `address(this)`. Does not store `Message`/`content`.
+/// @title Generic blockchain-resident agent endpoint.
+/// @dev Native transport identity is `msg.sender`; a configured trusted relay may carry an opaque
+/// logical sender. The Core never stores a full `Message` or `content`.
 contract Agent is IAgent {
-    using MessageLib for Message;
-
     address public immutable trustedRelay;
 
     error RelayMustSetLogicalSender();
@@ -33,8 +32,9 @@ contract Agent is IAgent {
     }
 
     /// @dev Named `handle` because Solidity reserves `receive` for the ETH receive function.
+    /// Native callers must use `logicalSender == 0`; only `trustedRelay` may set it.
     function handle(Message calldata message) external {
-        message.validate();
+        MessageLib.validateFields(message.protocol, message.conversationId);
         _authenticate(message);
         _onInbound(message);
         emit Received(
@@ -51,12 +51,14 @@ contract Agent is IAgent {
         _onReceive(message);
     }
 
-    /// @dev Native outbound: `logicalSender` must be 0. Peer sees `msg.sender == address(this)`.
+    /// @dev Internal native delivery avoids the previous external self-call (`this.reply`).
+    /// The peer still observes this agent contract as `msg.sender` because `IAgent(to).handle`
+    /// is an external call originating from this contract.
     function _send(address to, Message memory message) internal virtual {
         if (message.logicalSender != bytes32(0)) {
             revert UnauthorizedLogicalSender();
         }
-        message.validate();
+        MessageLib.validateFields(message.protocol, message.conversationId);
         IAgent(to).handle(message);
     }
 

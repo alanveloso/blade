@@ -341,6 +341,22 @@ contract RequestTest is Test {
         bob.handle(_replyAct(req, Performative.Inform));
     }
 
+    function test_outboundContinuationCannotBeRedirected() public {
+        Message memory req = _request();
+        alice.startRequest(address(bob), req);
+        ScriptedRequestAgent charlie = new ScriptedRequestAgent(address(relaySink));
+        vm.expectRevert(RequestAgent.UnexpectedPeer.selector);
+        bob.respond(req, address(charlie), _replyAct(req, Performative.Inform));
+        _assertActive(
+            bob,
+            req.conversationId,
+            RequestPhase.Requested,
+            RequestRole.Participant,
+            address(alice),
+            bytes32(0)
+        );
+    }
+
     function test_relayRequestThenRefuse() public {
         Message memory req = _request();
         req.logicalSender = keccak256("external-alice");

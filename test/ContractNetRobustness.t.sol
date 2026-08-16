@@ -9,6 +9,7 @@ import {Performative} from "../src/core/Performative.sol";
 import {Protocol} from "../src/core/Protocol.sol";
 import {
     AutoCompleteParticipant,
+    DecisionRecordingParticipant,
     ExposedContractNetManager,
     ExposedContractNetParticipant,
     MaliciousReentrantParticipant,
@@ -26,6 +27,7 @@ contract ContractNetRobustnessTest is Test {
     RevertOnAcceptParticipant internal revertAccept;
     RevertOnCfpParticipant internal revertCfp;
     MaliciousReentrantParticipant internal malicious;
+    DecisionRecordingParticipant internal recorder;
 
     bytes internal constant UNIQUE =
         hex"c0ffee01c0ffee02c0ffee03c0ffee04c0ffee05c0ffee06c0ffee07c0ffee08";
@@ -40,6 +42,7 @@ contract ContractNetRobustnessTest is Test {
         revertAccept = new RevertOnAcceptParticipant();
         revertCfp = new RevertOnCfpParticipant();
         malicious = new MaliciousReentrantParticipant();
+        recorder = new DecisionRecordingParticipant();
         vm.warp(1_700_000_000);
     }
 
@@ -65,6 +68,29 @@ contract ContractNetRobustnessTest is Test {
 
     function _deadline() internal view returns (uint64) {
         return uint64(block.timestamp + 100);
+    }
+
+    function test_managerDecisionDoesNotReuseCfpReplyBy() public {
+        bytes32 id = keccak256("decision-replyby-zero");
+        uint64 by = _deadline();
+        Message memory cfp = _cfp(id, by);
+        manager.cfp(_one(address(recorder)), cfp);
+        recorder.respond(cfp, address(manager), _out(cfp, Performative.Propose));
+        vm.warp(uint256(by) + 1);
+        manager.evaluate(id, _one(address(recorder)), _empty(), _empty());
+        assertEq(recorder.lastDecision(), uint8(Performative.AcceptProposal));
+        assertEq(recorder.lastDecisionReplyBy(), 0);
+    }
+
+    function test_lateProposalRejectionDoesNotReuseCfpReplyBy() public {
+        bytes32 id = keccak256("late-reject-replyby-zero");
+        uint64 by = _deadline();
+        Message memory cfp = _cfp(id, by);
+        manager.cfp(_one(address(recorder)), cfp);
+        vm.warp(uint256(by) + 1);
+        recorder.respond(cfp, address(manager), _out(cfp, Performative.Propose));
+        assertEq(recorder.lastDecision(), uint8(Performative.RejectProposal));
+        assertEq(recorder.lastDecisionReplyBy(), 0);
     }
 
     function _empty() internal pure returns (address[] memory a) {
@@ -483,7 +509,7 @@ contract ContractNetRobustnessTest is Test {
         manager.cfp(_one(address(p1)), cfp);
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
-        vm.expectRevert(ContractNetLib.DuplicateEvaluateEntry.selector);
+        vm.expectRevert(ContractNetLib.IncompleteEvaluation.selector);
         manager.evaluate(id, _two(address(p1), address(p1)), _empty(), _empty());
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_PROPOSED);
     }
@@ -496,7 +522,7 @@ contract ContractNetRobustnessTest is Test {
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         p2.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
-        vm.expectRevert(ContractNetLib.DuplicateEvaluateEntry.selector);
+        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         manager.evaluate(id, _empty(), _two(address(p1), address(p1)), _empty());
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_PROPOSED);
         assertEq(manager.slotOf(id, address(p2)), ContractNetLib.SLOT_PROPOSED);
@@ -508,7 +534,7 @@ contract ContractNetRobustnessTest is Test {
         Message memory cfp = _cfp(id, by);
         manager.cfp(_one(address(p1)), cfp);
         vm.warp(uint256(by) + 1);
-        vm.expectRevert(ContractNetLib.DuplicateEvaluateEntry.selector);
+        vm.expectRevert(ContractNetLib.IncompleteEvaluation.selector);
         manager.evaluate(id, _empty(), _empty(), _two(address(p1), address(p1)));
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_INVITED);
     }
@@ -521,7 +547,7 @@ contract ContractNetRobustnessTest is Test {
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         p2.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
-        vm.expectRevert(ContractNetLib.OverlappingEvaluateLists.selector);
+        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         manager.evaluate(id, _one(address(p1)), _one(address(p1)), _empty());
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_PROPOSED);
     }

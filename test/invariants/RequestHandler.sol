@@ -23,7 +23,7 @@ contract RequestHandler is Test {
     uint256 public successfulMutations;
 
     constructor() {
-        relay = address(0x11EE);
+        relay = address(0xBEEF);
         alice = new ScriptedRequestAgent(relay);
         bob = new ScriptedRequestAgent(relay);
         stranger = new ScriptedRequestAgent(relay);

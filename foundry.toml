@@ -8,6 +8,7 @@ solc = "0.8.26"
 optimizer = true
 optimizer_runs = 200
 via_ir = false
+evm_version = "cancun"
 fs_permissions = [{ access = "read", path = "./" }]
 
 # Invariant budget for local/CI tests.

@@ -84,3 +84,21 @@ contract MaliciousReentrantParticipant is ExposedContractNetParticipant {
         }
     }
 }
+
+/// @dev Test-only participant that records manager decision metadata.
+contract DecisionRecordingParticipant is ExposedContractNetParticipant {
+    uint8 public lastDecision;
+    uint64 public lastDecisionReplyBy;
+
+    constructor() ExposedContractNetParticipant(address(0)) {}
+
+    function _onReceive(Message calldata inbound) internal override {
+        if (
+            inbound.performative == uint8(Performative.AcceptProposal)
+                || inbound.performative == uint8(Performative.RejectProposal)
+        ) {
+            lastDecision = inbound.performative;
+            lastDecisionReplyBy = inbound.replyBy;
+        }
+    }
+}

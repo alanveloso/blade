@@ -7,7 +7,7 @@ import {Message} from "./Message.sol";
 import {Performative} from "./Performative.sol";
 import {Protocol} from "./Protocol.sol";
 
-/// @title FIPA Contract Net participant. Does not store `Message`/`content`.
+/// @title Participant role for the supported FIPA Contract Net interaction subset.
 contract ContractNetParticipant is Agent {
     struct Session {
         uint8 phase;
@@ -34,7 +34,9 @@ contract ContractNetParticipant is Agent {
         Session storage s = _cn[message.conversationId];
         Performative act = Performative(message.performative);
         if (s.phase == ContractNetLib.PART_NONE) {
-            ContractNetLib.requireCfp(message);
+            ContractNetLib.requireCfpFields(
+                message.protocol, message.performative, message.conversationId, message.replyBy
+            );
             s.phase = ContractNetLib.PART_CFPED;
             s.manager = msg.sender;
             s.replyBy = message.replyBy;
@@ -63,9 +65,6 @@ contract ContractNetParticipant is Agent {
             return;
         }
         if (act == Performative.NotUnderstood) {
-            if (s.phase == ContractNetLib.PART_NONE) {
-                revert ContractNetLib.InvalidTransition();
-            }
             delete _cn[message.conversationId];
             emit ContractNetParticipantPhase(
                 message.conversationId, ContractNetLib.PART_NONE, message.performative

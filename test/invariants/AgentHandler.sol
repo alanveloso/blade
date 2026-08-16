@@ -8,7 +8,7 @@ import {Message} from "../../src/core/Message.sol";
 contract AgentHandler is Test {
     Agent public native;
     Agent public withRelay;
-    address public relay = address(0x11EE);
+    address public relay = address(0xBEEF);
     bytes internal constant NEEDLE =
         hex"c0ffee01c0ffee02c0ffee03c0ffee04c0ffee05c0ffee06c0ffee07c0ffee08";
 

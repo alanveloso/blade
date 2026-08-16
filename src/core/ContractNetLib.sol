@@ -29,19 +29,29 @@ library ContractNetLib {
     uint8 internal constant PART_PROPOSED = 2;
     uint8 internal constant PART_ACCEPTED = 3;
 
-    function requireCfp(Message memory m) internal pure {
-        if (m.protocol != uint8(Protocol.FipaContractNet)) {
+    /// @dev Field-only CFP validation is usable from calldata without copying dynamic `content`.
+    function requireCfpFields(
+        uint8 protocol,
+        uint8 performative,
+        bytes32 conversationId,
+        uint64 replyBy
+    ) internal pure {
+        if (protocol != uint8(Protocol.FipaContractNet)) {
             revert InvalidCfp();
         }
-        if (m.performative != uint8(Performative.Cfp)) {
+        if (performative != uint8(Performative.Cfp)) {
             revert InvalidCfp();
         }
-        if (m.conversationId == bytes32(0)) {
+        if (conversationId == bytes32(0)) {
             revert InvalidCfp();
         }
-        if (m.replyBy == 0) {
+        if (replyBy == 0) {
             revert ReplyByRequired();
         }
+    }
+
+    function requireCfp(Message memory m) internal pure {
+        requireCfpFields(m.protocol, m.performative, m.conversationId, m.replyBy);
     }
 
     function isLate(uint64 replyBy) internal view returns (bool) {
@@ -51,34 +61,6 @@ library ContractNetLib {
     function requireWindowClosed(uint64 replyBy) internal view {
         if (!isLate(replyBy)) {
             revert EvaluationTooEarly();
-        }
-    }
-
-    function requireNoDuplicates(address[] calldata a) internal pure {
-        uint256 n = a.length;
-        for (uint256 i = 0; i < n; i++) {
-            for (uint256 j = i + 1; j < n; j++) {
-                if (a[i] == a[j]) {
-                    revert DuplicateEvaluateEntry();
-                }
-            }
-        }
-    }
-
-    function contains(address[] calldata a, address x) internal pure returns (bool) {
-        for (uint256 i = 0; i < a.length; i++) {
-            if (a[i] == x) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function requireDisjoint(address[] calldata a, address[] calldata b) internal pure {
-        for (uint256 i = 0; i < a.length; i++) {
-            if (contains(b, a[i])) {
-                revert OverlappingEvaluateLists();
-            }
         }
     }
 }

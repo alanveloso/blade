@@ -20,7 +20,8 @@ enum RequestRole {
     Participant
 }
 
-/// @title On-chain FIPA Request (TB1). Cancel meta-IP is out of scope for this task.
+/// @title On-chain implementation of the supported FIPA Request interaction subset.
+/// @dev Cancel is outside the current Core scope.
 contract RequestAgent is Agent {
     /// @dev Live session only. Terminal acts `delete` this entry; `Terminal` is not stored.
     struct Status {
@@ -99,6 +100,15 @@ contract RequestAgent is Agent {
             Status storage s = _request[outbound.conversationId];
             if (s.phase == RequestPhase.None) {
                 revert InvalidTransition();
+            }
+            // The Core owns peer correlation in both directions. A continuation cannot be
+            // redirected by application code to a transport peer different from the live session.
+            if (s.logicalPeer == bytes32(0)) {
+                if (to != s.transportPeer) {
+                    revert UnexpectedPeer();
+                }
+            } else if (to != trustedRelay) {
+                revert UnexpectedPeer();
             }
             _commit(
                 outbound.conversationId,
