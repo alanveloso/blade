@@ -235,6 +235,8 @@ contract BehaviorRuntimeTest is Test {
         (bool ok,) = address(runtime)
             .call(abi.encodeWithSignature("dispatchExplicitTrigger(uint256)", DEFAULT_STEP_GAS));
         assertFalse(ok);
+        (ok,) = address(runtime).call(abi.encodeWithSignature("dispatchExplicitTrigger()"));
+        assertFalse(ok);
         (ok,) = address(runtime)
             .call(
                 abi.encodeWithSignature(
