@@ -7,11 +7,16 @@ import {IExternalApplicationStrategy} from "./IExternalApplicationStrategy.sol";
 
 /// @title Opt-in local installation of reusable external application strategies.
 /// @dev Capability mixin: does not inherit `Agent`. A concrete agent composes both.
-/// @dev Application-external only. Not a protocol-role registry. `S` is not an AID.
-/// @dev Map presence is membership (installed), not runnable/eligible. No progress store.
-/// @dev `_runExternalBehavior` uses explicit STATICCALL. Strategy revert data is not bubbled.
+/// @dev `_runExternalBehavior` uses explicit STATICCALL with a caller-supplied gas ceiling
+///      (EIP-150 may deliver less than requested). Strategy revert data is not bubbled.
+/// @dev `MAX_STRATEGY_RETURN` bounds the external execution copy; it is not a semantic
+///      maximum for `Action.data`.
 abstract contract ExternalApplicationBehaviorHost {
-    /// @dev `address(0)` means not installed. Occupied ids must be uninstalled before reuse.
+    /// @dev Operational cap on success returndata copied from an untrusted STATICCALL.
+    uint256 internal constant MAX_STRATEGY_RETURN = 1024;
+    /// @dev Defensive host reserve so a drained stipend still yields a BLADE error. Not scheduling policy.
+    uint256 internal constant POST_CALL_OVERHEAD = 50_000;
+
     mapping(bytes32 localId => address implementation) internal _behaviors;
 
     error InvalidLocalId();
@@ -20,7 +25,9 @@ abstract contract ExternalApplicationBehaviorHost {
     error NotInstalled();
     error NoStrategyCode();
     error ContextAgentMismatch();
+    error InvalidGasBudget();
     error InvalidStrategyReturn();
+    error StrategyReturnTooLarge();
     error BehaviorExecutionFailed(bytes32 localId, address implementation);
 
     event BehaviorInstalled(bytes32 indexed localId, address implementation);
@@ -53,10 +60,11 @@ abstract contract ExternalApplicationBehaviorHost {
         emit BehaviorUninstalled(localId, implementation);
     }
 
-    /// @dev One local installation per call. Not an engine. Does not decode `Message`.
-    /// @dev `ContextLib.validate` is shape only; `ctx.agent` must be this contract.
-    /// @dev Not `view`: `applyAction` is a no-op today but is the mutation path for later kinds.
-    function _runExternalBehavior(bytes32 localId, BehaviorContext memory ctx) internal {
+    /// @dev `gasBudget` is a requested STATICCALL ceiling, not an exact inner `gasleft()`.
+    ///      The strategy never receives more than `gasBudget`; EIP-150 may deliver less.
+    function _runExternalBehavior(bytes32 localId, BehaviorContext memory ctx, uint256 gasBudget)
+        internal
+    {
         address implementation = _behaviors[localId];
         if (implementation == address(0)) {
             revert NotInstalled();
@@ -68,11 +76,18 @@ abstract contract ExternalApplicationBehaviorHost {
         if (ctx.agent != address(this)) {
             revert ContextAgentMismatch();
         }
+        uint256 remaining = gasleft();
+        if (
+            gasBudget == 0 || remaining <= POST_CALL_OVERHEAD
+                || gasBudget > remaining - POST_CALL_OVERHEAD
+        ) {
+            revert InvalidGasBudget();
+        }
 
         bytes memory payload = abi.encodeCall(IExternalApplicationStrategy.decide, (ctx));
         bool ok;
         assembly ("memory-safe") {
-            ok := staticcall(gas(), implementation, add(payload, 0x20), mload(payload), 0, 0)
+            ok := staticcall(gasBudget, implementation, add(payload, 0x20), mload(payload), 0, 0)
         }
         if (!ok) {
             revert BehaviorExecutionFailed(localId, implementation);
@@ -85,12 +100,57 @@ abstract contract ExternalApplicationBehaviorHost {
         if (size == 0) {
             revert InvalidStrategyReturn();
         }
+        if (size > MAX_STRATEGY_RETURN) {
+            revert StrategyReturnTooLarge();
+        }
+
         bytes memory ret = new bytes(size);
         assembly ("memory-safe") {
             returndatacopy(add(ret, 0x20), 0, size)
         }
 
-        Action memory proposed = abi.decode(ret, (Action));
-        ActionLib.applyAction(proposed);
+        ActionLib.applyAction(_decodeAction(ret));
+    }
+
+    /// @dev Canonical ABI for `returns (Action)` is `abi.encode(Action)`: outer offset 32,
+    ///      then kind, data offset 64 relative to the tuple, length, padded data.
+    ///      Size is `128 + pad32(len)`. Rejects truncated/odd encodings without `abi.decode`
+    ///      (the decoder can Panic; try/catch cannot wrap it).
+    function _decodeAction(bytes memory ret) private pure returns (Action memory a) {
+        uint256 size = ret.length;
+        if (size < 128) {
+            revert InvalidStrategyReturn();
+        }
+        uint256 outer;
+        uint256 kindWord;
+        uint256 offset;
+        uint256 len;
+        assembly ("memory-safe") {
+            outer := mload(add(ret, 32))
+            kindWord := mload(add(ret, 64))
+            offset := mload(add(ret, 96))
+            len := mload(add(ret, 128))
+        }
+        if (outer != 32 || kindWord > type(uint8).max || offset != 64) {
+            revert InvalidStrategyReturn();
+        }
+        if (len > size - 128) {
+            revert InvalidStrategyReturn();
+        }
+        uint256 padded = (len + 31) & ~uint256(31);
+        if (size != 128 + padded) {
+            revert InvalidStrategyReturn();
+        }
+        // kindWord was bounded to uint8 above.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        a.kind = uint8(kindWord);
+        if (len == 0) {
+            return a;
+        }
+        bytes memory data = new bytes(len);
+        assembly ("memory-safe") {
+            mcopy(add(data, 32), add(ret, 160), len)
+        }
+        a.data = data;
     }
 }
