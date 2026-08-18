@@ -92,6 +92,10 @@ contract EngineAgent is Agent, BehaviorEngine {
         _installBehavior(localId, implementation);
     }
 
+    function installCyclicBehavior(bytes32 localId, address implementation) external {
+        _installCyclicBehavior(localId, implementation);
+    }
+
     function uninstallBehavior(bytes32 localId) external {
         _uninstallBehavior(localId);
     }
@@ -268,6 +272,150 @@ contract BehaviorEngineTest is Test {
         mixed.runBehaviorStep(ctx, DEFAULT_STEP_GAS);
         assertEq(mixed.installedBehaviorCount(), 1);
         assertEq(mixed.installedBehaviorAt(0), idB);
+    }
+
+    function test_cyclicOneTriggerCallsDecideOnceAndStays() public {
+        agent.installCyclicBehavior(idA, address(noneA));
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 1
+        );
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.effects(), 1);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idA);
+        assertEq(agent.behaviorImplementation(idA), address(noneA));
+    }
+
+    function test_cyclicRemainsAcrossTwoTriggers() public {
+        agent.installCyclicBehavior(idA, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.effects(), 2);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idA);
+    }
+
+    function test_mixedOneShotCyclicOneShotLeavesCyclic() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneA));
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector)
+        );
+        vm.expectCall(
+            address(noneB), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector)
+        );
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+        assertEq(agent.behaviorImplementation(idC), address(0));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.effects(), 2);
+    }
+
+    function test_mixedSecondTriggerDoesNotCallCompletedOneShot() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 0
+        );
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorAt(0), idB);
+    }
+
+    function test_sameStrategyCanBeOneShotAndCyclicOnDifferentIds() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+        assertEq(agent.behaviorImplementation(idB), address(noneA));
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+    }
+
+    function test_reinstallOneShotAfterCyclicUninstallCompletes() public {
+        agent.installCyclicBehavior(idA, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        agent.uninstallBehavior(idA);
+        agent.installBehavior(idA, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 0);
+        assertEq(agent.effects(), 2);
+    }
+
+    function test_reinstallCyclicAfterOneShotCompletionStays() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 0);
+        agent.installCyclicBehavior(idA, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idA);
+        assertEq(agent.effects(), 2);
+    }
+
+    function test_mixedFailFastLeavesAllIncludingCyclic() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(unknownKind));
+        vm.expectRevert(ActionLib.UnknownKind.selector);
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 3);
+        assertEq(agent.installedBehaviorAt(0), idA);
+        assertEq(agent.installedBehaviorAt(1), idB);
+        assertEq(agent.installedBehaviorAt(2), idC);
+        agent.uninstallBehavior(idC);
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+    }
+
+    function test_cyclicInstallOnOccupiedOneShotReverts() public {
+        agent.installBehavior(idA, address(noneA));
+        vm.expectRevert(BehaviorMembership.AlreadyInstalled.selector);
+        agent.installCyclicBehavior(idA, address(noneB));
+        assertEq(agent.behaviorImplementation(idA), address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 0);
+    }
+
+    function test_ninthCyclicInstallReverts() public {
+        for (uint256 i = 0; i < 8; ++i) {
+            agent.installBehavior(bytes32(i + 1), address(noneA));
+        }
+        vm.expectRevert(BehaviorEngine.TooManyBehaviors.selector);
+        agent.installCyclicBehavior(bytes32(uint256(9)), address(noneB));
+        assertEq(agent.installedBehaviorCount(), 8);
+    }
+
+    function test_hostWithoutEngineHasNoCyclicInstall() public {
+        (bool ok,) = address(hostOnly)
+            .call(
+                abi.encodeWithSignature(
+                    "installCyclicBehavior(bytes32,address)", idA, address(noneA)
+                )
+            );
+        assertFalse(ok);
+    }
+
+    function test_handleDoesNotInvokeCyclicDecide() public {
+        agent.installCyclicBehavior(idA, address(noneA));
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 0
+        );
+        Message memory m;
+        m.conversationId = keccak256("no-dispatch-cyclic");
+        agent.handle(m);
+        assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 1);
     }
 
     function test_equalSplitDoesNotOverfundStrategy() public {
