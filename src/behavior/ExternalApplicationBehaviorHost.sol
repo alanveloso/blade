@@ -37,7 +37,7 @@ abstract contract ExternalApplicationBehaviorHost {
         return _behaviors[localId];
     }
 
-    function _installBehavior(bytes32 localId, address implementation) internal {
+    function _installBehavior(bytes32 localId, address implementation) internal virtual {
         if (localId == bytes32(0)) {
             revert InvalidLocalId();
         }
@@ -51,7 +51,7 @@ abstract contract ExternalApplicationBehaviorHost {
         emit BehaviorInstalled(localId, implementation);
     }
 
-    function _uninstallBehavior(bytes32 localId) internal {
+    function _uninstallBehavior(bytes32 localId) internal virtual {
         address implementation = _behaviors[localId];
         if (implementation == address(0)) {
             revert NotInstalled();
