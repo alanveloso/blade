@@ -4,6 +4,7 @@ import {Test} from "forge-std/Test.sol";
 import {
     ExternalApplicationBehaviorHost
 } from "../../src/behavior/ExternalApplicationBehaviorHost.sol";
+import {BehaviorMembership} from "../../src/behavior/BehaviorMembership.sol";
 import {IExternalApplicationStrategy} from "../../src/behavior/IExternalApplicationStrategy.sol";
 import {Action, ActionLib, Kind} from "../../src/behavior/Action.sol";
 import {BehaviorContext, ContextLib} from "../../src/behavior/Context.sol";
@@ -409,7 +410,7 @@ contract ExternalApplicationBehaviorTest is Test {
     }
 
     function test_notInstalledReverts() public {
-        vm.expectRevert(ExternalApplicationBehaviorHost.NotInstalled.selector);
+        vm.expectRevert(BehaviorMembership.NotInstalled.selector);
         _run(agent, idX, _explicitCtx(address(agent)));
     }
 
@@ -430,7 +431,7 @@ contract ExternalApplicationBehaviorTest is Test {
             abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector),
             0
         );
-        vm.expectRevert(ExternalApplicationBehaviorHost.ContextAgentMismatch.selector);
+        vm.expectRevert(BehaviorMembership.ContextAgentMismatch.selector);
         _run(agent, idX, ctx);
         assertEq(agent.effects(), 0);
     }
