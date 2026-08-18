@@ -8,9 +8,10 @@ import {BehaviorContext} from "./Context.sol";
 /// @dev Not an autonomous scheduler. Not a protocol-role runtime. Does not inherit `Agent`.
 /// @dev v0 selection is `installed == selected` (insertion order). Not a general BLADE claim.
 /// @dev `stepGas` is the aggregate requested STATICCALL ceiling for strategies, not transaction gas.
-/// @dev v0 lifetime is one-shot: after a fully successful step, each snapshot id is
-///      uninstalled iff `_completesAfterSuccess(id)` (default `true`). Trusted engine
-///      policy, not strategy `done()`.
+/// @dev v0 lifetimes are per installation, not per strategy address: `_installBehavior` is
+///      OneShot; `_installCyclicBehavior` stays in the pool across explicit steps.
+///      After a fully successful step, each snapshot id is uninstalled iff
+///      `_completesAfterSuccess(id)` (`!_cyclic[id]`). Trusted engine policy, not strategy `done()`.
 abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
     /// @dev Operational walk/storage cap for this engine. Not a semantic maximum of the agent model.
     uint256 internal constant MAX_INSTALLED_APPLICATION_BEHAVIORS = 8;
@@ -18,6 +19,8 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
     uint256 internal constant ENGINE_OVERHEAD = 80_000;
 
     bytes32[] internal _orderedBehaviorIds;
+    /// @dev Installation lifetime. Absent/false = OneShot. Not a property of the strategy.
+    mapping(bytes32 localId => bool cyclic) internal _cyclic;
 
     error TooManyBehaviors();
     error InvalidStepGas();
@@ -45,11 +48,18 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
     function _uninstallBehavior(bytes32 localId) internal virtual override {
         super._uninstallBehavior(localId);
         _removePreservingOrder(localId);
+        delete _cyclic[localId];
     }
 
-    /// @dev Trusted engine lifetime policy. Not strategy `done()`. This slice: all true.
-    function _completesAfterSuccess(bytes32) internal view virtual returns (bool) {
-        return true;
+    /// @dev Opt-in stay-in-pool lifetime. Reuses membership/cap/order from `_installBehavior`.
+    function _installCyclicBehavior(bytes32 localId, address implementation) internal {
+        _installBehavior(localId, implementation);
+        _cyclic[localId] = true;
+    }
+
+    /// @dev Trusted engine lifetime policy. Not strategy `done()`.
+    function _completesAfterSuccess(bytes32 localId) internal view virtual returns (bool) {
+        return !_cyclic[localId];
     }
 
     /// @dev One explicit trigger. Does not dispatch from `handle`. Fail-fast; never `gas()`.
