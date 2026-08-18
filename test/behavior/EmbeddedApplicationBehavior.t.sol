@@ -1,9 +1,7 @@
 pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {
-    EmbeddedApplicationBehaviorHost
-} from "../../src/behavior/EmbeddedApplicationBehaviorHost.sol";
+import {EmbeddedApplicationBehaviorHost} from "../baselines/EmbeddedApplicationBehaviorHost.sol";
 import {BehaviorEngine} from "../../src/behavior/BehaviorEngine.sol";
 import {
     ExternalApplicationBehaviorHost

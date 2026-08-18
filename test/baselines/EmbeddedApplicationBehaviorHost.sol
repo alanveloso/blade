@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Action, ActionLib} from "./Action.sol";
-import {BehaviorContext, ContextLib} from "./Context.sol";
-import {BehaviorMembership} from "./BehaviorMembership.sol";
+import {Action, ActionLib} from "../../src/behavior/Action.sol";
+import {BehaviorContext, ContextLib} from "../../src/behavior/Context.sol";
+import {BehaviorMembership} from "../../src/behavior/BehaviorMembership.sol";
 
 /// @title Paired in-process application decision baseline (ADR locus A).
 /// @dev Not a product engine. Not an autonomous scheduler. Does not inherit `Agent`.
@@ -46,7 +46,7 @@ abstract contract EmbeddedApplicationBehaviorHost is BehaviorMembership {
         virtual
         returns (Action memory);
 
-    /// @dev Same post-decision frontier as external: validate then apply. No gasBudget.
+    /// @dev Same post-decision frontier as external: validated apply. No gasBudget.
     function _runEmbeddedBehavior(bytes32 localId, BehaviorContext memory ctx) internal {
         if (!_embedded[localId]) {
             revert NotInstalled();
@@ -56,7 +56,6 @@ abstract contract EmbeddedApplicationBehaviorHost is BehaviorMembership {
             revert ContextAgentMismatch();
         }
         Action memory proposed = _embeddedDecide(localId, ctx);
-        ActionLib.validate(proposed);
         ActionLib.applyAction(proposed);
     }
 }

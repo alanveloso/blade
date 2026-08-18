@@ -25,6 +25,33 @@ Being Contract Net **manager and participant of the same Contract Net conversati
 
 Minimal patterns: `examples/RequestExample.sol`, `examples/ContractNetExample.sol`, `examples/CompositeExample.sol`.
 
+## Experimental Behavior runtime
+
+Post-snapshot development in `src/behavior/` adds an **opt-in reactive application-behavior runtime**.
+It does not change every `Agent` and does not claim a JADE cooperative scheduler.
+
+Current product path:
+
+```text
+Message / authorized Explicit transaction
+        -> Agent-authored BehaviorContext
+        -> BehaviorEngine step
+        -> bounded STATICCALL to an installed stateless strategy
+        -> validated Action
+```
+
+The engine supports agent-local installations, OneShot lifetime by default, opt-in Cyclic
+re-eligibility across later triggers, bounded walk/at-most dispatch, per-step gas partitioning,
+bounded returndata, and an optional immutable external-executor gate. `Action` currently exposes
+only `None`; application-effect dispatch is intentionally a later slice. Protocol-role Behavior
+adapters are also later work.
+
+The matched embedded locus used for architectural comparison is a **test/research baseline** under
+`test/baselines/`, not a second production runtime.
+
+Behavior code remains transaction-driven: contracts do not wake themselves, and time-based wake
+requires a later external transaction source.
+
 ## Requirements
 
 Solidity **0.8.26** and [Foundry](https://book.getfoundry.sh/).
