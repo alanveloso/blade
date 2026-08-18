@@ -111,6 +111,13 @@ contract EngineAgent is Agent, BehaviorEngine {
         effects++;
     }
 
+    function runBehaviorStepAtMost(BehaviorContext memory ctx, uint256 stepGas, uint256 maxToRun)
+        external
+    {
+        _runBehaviorStepAtMost(ctx, stepGas, maxToRun);
+        effects++;
+    }
+
     function runFromMessage(address transportCaller, Message calldata m, uint256 stepGas) external {
         _runBehaviorStep(ContextLib.messageTrigger(address(this), transportCaller, m), stepGas);
         effects++;
@@ -121,6 +128,17 @@ contract EngineAgent is Agent, BehaviorEngine {
         returns (bytes memory reason, uint256 gasRemaining)
     {
         try this.runBehaviorStep(ctx, stepGas) {
+            return ("", gasleft());
+        } catch (bytes memory r) {
+            return (r, gasleft());
+        }
+    }
+
+    function catchStepAtMost(BehaviorContext memory ctx, uint256 stepGas, uint256 maxToRun)
+        external
+        returns (bytes memory reason, uint256 gasRemaining)
+    {
+        try this.runBehaviorStepAtMost(ctx, stepGas, maxToRun) {
             return ("", gasleft());
         } catch (bytes memory r) {
             return (r, gasleft());
@@ -159,6 +177,8 @@ contract BehaviorEngineTest is Test {
     HostOnly internal hostOnly;
     NoneStrategy internal noneA;
     NoneStrategyB internal noneB;
+    NoneStrategy internal noneC;
+    NoneStrategy internal noneD;
     UnknownKindStrategy internal unknownKind;
     LoopStrategy internal looping;
     RevertingStrategy internal reverting;
@@ -166,6 +186,7 @@ contract BehaviorEngineTest is Test {
     bytes32 internal idA;
     bytes32 internal idB;
     bytes32 internal idC;
+    bytes32 internal idD;
     address internal keeper;
 
     function setUp() public {
@@ -174,12 +195,15 @@ contract BehaviorEngineTest is Test {
         hostOnly = new HostOnly();
         noneA = new NoneStrategy();
         noneB = new NoneStrategyB();
+        noneC = new NoneStrategy();
+        noneD = new NoneStrategy();
         unknownKind = new UnknownKindStrategy();
         looping = new LoopStrategy();
         reverting = new RevertingStrategy();
         idA = keccak256("A");
         idB = keccak256("B");
         idC = keccak256("C");
+        idD = keccak256("D");
         keeper = makeAddr("keeper");
     }
 
@@ -582,5 +606,248 @@ contract BehaviorEngineTest is Test {
         BehaviorContext memory ctx;
         vm.expectRevert(ContextLib.UninitializedTrigger.selector);
         agent.runBehaviorStep(ctx, DEFAULT_STEP_GAS);
+    }
+
+    function test_emptyPoolAtMostIsNoOpEvenWithZeroMaxOrMaxStepGas() public {
+        agent.runBehaviorStepAtMost(_explicit(), 0, 0);
+        agent.runBehaviorStepAtMost(_explicit(), type(uint256).max, 0);
+        agent.runBehaviorStepAtMost(_explicit(), 0, type(uint256).max);
+        assertEq(agent.effects(), 3);
+        assertEq(agent.installedBehaviorCount(), 0);
+    }
+
+    function test_atMostZeroWithNonEmptyPoolReverts() public {
+        agent.installBehavior(idA, address(noneA));
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 0
+        );
+        vm.expectRevert(BehaviorEngine.InvalidMaxToRun.selector);
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 0);
+        assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 1);
+    }
+
+    function test_atMostStepGasLessThanWindowReverts() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneC));
+        vm.expectRevert(BehaviorEngine.InvalidStepGas.selector);
+        agent.runBehaviorStepAtMost(_explicit(), 1, 2);
+        assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 3);
+    }
+
+    function test_atMostOneRingDoesNotSkipSuccessorAfterOneShot() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneC));
+
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.installedBehaviorAt(1), idC);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.installedBehaviorAt(1), idC);
+
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.behaviorImplementation(idC), address(0));
+
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.effects(), 4);
+    }
+
+    function test_atMostOneStep1DoesNotCallCyclicSuccessor() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneC));
+        vm.expectCall(
+            address(noneB), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 0
+        );
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+    }
+
+    function test_atMostTwoWindowRemovalsDoNotSkipNextId() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneC));
+        agent.installCyclicBehavior(idD, address(noneD));
+
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 2);
+        assertEq(agent.installedBehaviorCount(), 3);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.installedBehaviorAt(1), idC);
+        assertEq(agent.installedBehaviorAt(2), idD);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 2);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.installedBehaviorAt(1), idD);
+        assertEq(agent.behaviorImplementation(idC), address(0));
+        assertEq(agent.effects(), 2);
+    }
+
+    function test_atMostTwoSecondWindowStartsAtCapturedNextId() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneC));
+        agent.installCyclicBehavior(idD, address(noneD));
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 2);
+        vm.expectCall(
+            address(noneC), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 1
+        );
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 2);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.installedBehaviorAt(1), idD);
+    }
+
+    function test_atMostGreaterThanNRunsAllOnce() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installBehavior(idB, address(noneB));
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 9);
+        assertEq(agent.effects(), 1);
+        assertEq(agent.installedBehaviorCount(), 0);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+        assertEq(agent.behaviorImplementation(idB), address(0));
+    }
+
+    function test_atMostEqualToNRunsAllOnce() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installBehavior(idB, address(noneB));
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 2);
+        assertEq(agent.effects(), 1);
+        assertEq(agent.installedBehaviorCount(), 0);
+    }
+
+    function test_atMostEqualToNDoesNotMoveResumeCursor() public {
+        agent.installCyclicBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installCyclicBehavior(idC, address(noneC));
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 3);
+        vm.expectCall(
+            address(noneB), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 1
+        );
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorCount(), 3);
+        assertEq(agent.effects(), 3);
+    }
+
+    function test_atMostFailFastDoesNotAdvanceCursor() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installBehavior(idB, address(unknownKind));
+        agent.installCyclicBehavior(idC, address(noneC));
+        vm.expectRevert(ActionLib.UnknownKind.selector);
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 2);
+        assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 3);
+        assertEq(agent.installedBehaviorAt(0), idA);
+        assertEq(agent.installedBehaviorAt(1), idB);
+        assertEq(agent.installedBehaviorAt(2), idC);
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 1
+        );
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+    }
+
+    function test_atMostFailFastLoopDoesNotCallSecondInWindow() public {
+        agent.installBehavior(idA, address(looping));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneC));
+        vm.expectCall(
+            address(noneB), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 0
+        );
+        (bytes memory reason, uint256 gasRemaining) =
+            agent.catchStepAtMost(_explicit(), DEFAULT_STEP_GAS, 2);
+        assertEq(
+            reason,
+            abi.encodeWithSelector(
+                ExternalApplicationBehaviorHost.BehaviorExecutionFailed.selector,
+                idA,
+                address(looping)
+            )
+        );
+        assertGt(gasRemaining, 10_000);
+        assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 3);
+    }
+
+    function test_atMostOneDoesNotOverfundBeyondStepGas() public {
+        CapProbe probe = new CapProbe(DEFAULT_STEP_GAS);
+        agent.installBehavior(idA, address(probe));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.effects(), 1);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+    }
+
+    function test_atMostOneIsNotSplitByPoolSize() public {
+        uint256 nSplit = DEFAULT_STEP_GAS / 2;
+        CapProbe probe = new CapProbe(nSplit);
+        agent.installBehavior(idA, address(probe));
+        agent.installCyclicBehavior(idB, address(noneB));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExternalApplicationBehaviorHost.BehaviorExecutionFailed.selector,
+                idA,
+                address(probe)
+            )
+        );
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 2);
+    }
+
+    function test_atMostWrapsFromLastRemainingToFirst() public {
+        agent.installCyclicBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 1
+        );
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.effects(), 3);
+    }
+
+    function test_manualUninstallBetweenAtMostKeepsCursorValid() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneC));
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        agent.uninstallBehavior(idB);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idC);
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorCount(), 0);
+        assertEq(agent.effects(), 2);
+    }
+
+    function test_handleStillDoesNotDispatchAtMostPool() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 0
+        );
+        Message memory m;
+        m.conversationId = keccak256("no-dispatch-at-most");
+        agent.handle(m);
+        assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 2);
     }
 }
