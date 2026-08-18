@@ -10,10 +10,10 @@ import {ContextLib} from "./Context.sol";
 /// @dev Not a scheduler. Not protocol-role dispatch. Does not change snapshot `Agent.handle`.
 /// @dev No message filtering or per-behavior eligibility: every installed id is selected for every
 ///      accepted trigger (`installed == selected`). Restrict callers with `_authorizeInbound`.
-/// @dev `_dispatchExplicitTrigger` is internal. A public unrestricted Explicit endpoint would let
-///      any third party complete OneShots. Who may expose it is `external-executor-boundary`.
+/// @dev `_dispatchExplicitTrigger` is internal. Public Explicit exposure is `ExplicitExecutorGate`.
 abstract contract BehaviorRuntime is Agent, BehaviorEngine {
-    /// @dev Leaf budget for inbound Message steps. No hidden default. Engine splits; host applies.
+    /// @dev Leaf budget for a behavior step (Message inbound and authorized Explicit). No hidden default.
+    ///      Engine splits; host applies. Callers do not pass `stepGas`.
     function _behaviorStepGas() internal view virtual returns (uint256);
 
     function _onReceive(Message calldata inbound) internal virtual override {
