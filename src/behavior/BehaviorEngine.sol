@@ -8,6 +8,9 @@ import {BehaviorContext} from "./Context.sol";
 /// @dev Not an autonomous scheduler. Not a protocol-role runtime. Does not inherit `Agent`.
 /// @dev v0 selection is `installed == selected` (insertion order). Not a general BLADE claim.
 /// @dev `stepGas` is the aggregate requested STATICCALL ceiling for strategies, not transaction gas.
+/// @dev v0 lifetime is one-shot: after a fully successful step, each snapshot id is
+///      uninstalled iff `_completesAfterSuccess(id)` (default `true`). Trusted engine
+///      policy, not strategy `done()`.
 abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
     /// @dev Operational walk/storage cap for this engine. Not a semantic maximum of the agent model.
     uint256 internal constant MAX_INSTALLED_APPLICATION_BEHAVIORS = 8;
@@ -44,6 +47,11 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
         _removePreservingOrder(localId);
     }
 
+    /// @dev Trusted engine lifetime policy. Not strategy `done()`. This slice: all true.
+    function _completesAfterSuccess(bytes32) internal view virtual returns (bool) {
+        return true;
+    }
+
     /// @dev One explicit trigger. Does not dispatch from `handle`. Fail-fast; never `gas()`.
     function _runBehaviorStep(BehaviorContext memory ctx, uint256 stepGas) internal {
         uint256 n = _orderedBehaviorIds.length;
@@ -71,8 +79,19 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
             revert InvalidStepGas();
         }
 
+        bytes32[] memory snapshot = new bytes32[](n);
         for (uint256 i = 0; i < n; ++i) {
-            _runExternalBehavior(_orderedBehaviorIds[i], ctx, per);
+            snapshot[i] = _orderedBehaviorIds[i];
+        }
+
+        for (uint256 i = 0; i < n; ++i) {
+            _runExternalBehavior(snapshot[i], ctx, per);
+        }
+
+        for (uint256 i = 0; i < n; ++i) {
+            if (_completesAfterSuccess(snapshot[i])) {
+                _uninstallBehavior(snapshot[i]);
+            }
         }
     }
 
