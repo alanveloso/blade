@@ -4,6 +4,7 @@ import {Test} from "forge-std/Test.sol";
 import {
     ExternalApplicationBehaviorHost
 } from "../../src/behavior/ExternalApplicationBehaviorHost.sol";
+import {BehaviorMembership} from "../../src/behavior/BehaviorMembership.sol";
 import {Agent} from "../../src/core/Agent.sol";
 import {RequestAgent, RequestPhase} from "../../src/core/RequestAgent.sol";
 import {Message} from "../../src/core/Message.sol";
@@ -89,7 +90,7 @@ contract ExternalApplicationBehaviorHostTest is Test {
     }
 
     function test_zeroLocalIdReverts() public {
-        vm.expectRevert(ExternalApplicationBehaviorHost.InvalidLocalId.selector);
+        vm.expectRevert(BehaviorMembership.InvalidLocalId.selector);
         host.installBehavior(bytes32(0), strategyS);
     }
 
@@ -106,7 +107,7 @@ contract ExternalApplicationBehaviorHostTest is Test {
 
     function test_occupiedIdReverts() public {
         host.installBehavior(idX, strategyS);
-        vm.expectRevert(ExternalApplicationBehaviorHost.AlreadyInstalled.selector);
+        vm.expectRevert(BehaviorMembership.AlreadyInstalled.selector);
         host.installBehavior(idX, strategyS2);
         assertEq(host.behaviorImplementation(idX), strategyS);
     }
@@ -119,7 +120,7 @@ contract ExternalApplicationBehaviorHostTest is Test {
     }
 
     function test_uninstallNotInstalledReverts() public {
-        vm.expectRevert(ExternalApplicationBehaviorHost.NotInstalled.selector);
+        vm.expectRevert(BehaviorMembership.NotInstalled.selector);
         host.uninstallBehavior(idX);
     }
 
