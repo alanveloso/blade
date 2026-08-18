@@ -2,6 +2,7 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {BehaviorEngine} from "../../src/behavior/BehaviorEngine.sol";
+import {BehaviorMembership} from "../../src/behavior/BehaviorMembership.sol";
 import {
     ExternalApplicationBehaviorHost
 } from "../../src/behavior/ExternalApplicationBehaviorHost.sol";
@@ -15,6 +16,7 @@ import {Performative} from "../../src/core/Performative.sol";
 
 /// @dev Harness-only. Production engine has no hidden default step budget.
 uint256 constant DEFAULT_STEP_GAS = 200_000;
+uint256 constant DEFAULT_EXTERNAL_BEHAVIOR_GAS = 100_000;
 
 contract NoneStrategy is IExternalApplicationStrategy {
     function decide(BehaviorContext calldata ctx) external view returns (Action memory a) {
@@ -73,6 +75,12 @@ contract HostOnly is ExternalApplicationBehaviorHost {
     function installBehavior(bytes32 localId, address implementation) external {
         _installBehavior(localId, implementation);
     }
+
+    function runExternalBehavior(bytes32 localId, BehaviorContext memory ctx, uint256 gasBudget)
+        external
+    {
+        _runExternalBehavior(localId, ctx, gasBudget);
+    }
 }
 
 contract EngineAgent is Agent, BehaviorEngine {
@@ -86,6 +94,12 @@ contract EngineAgent is Agent, BehaviorEngine {
 
     function uninstallBehavior(bytes32 localId) external {
         _uninstallBehavior(localId);
+    }
+
+    function runExternalBehavior(bytes32 localId, BehaviorContext memory ctx, uint256 gasBudget)
+        external
+    {
+        _runExternalBehavior(localId, ctx, gasBudget);
     }
 
     function runBehaviorStep(BehaviorContext memory ctx, uint256 stepGas) external {
@@ -107,6 +121,19 @@ contract EngineAgent is Agent, BehaviorEngine {
         } catch (bytes memory r) {
             return (r, gasleft());
         }
+    }
+}
+
+/// @dev Test-only: locks `_completesAfterSuccess` as the lifetime gate. Not a product Cyclic API.
+contract EngineWithKeepId is EngineAgent {
+    bytes32 internal _keepId;
+
+    function keepAfterSuccess(bytes32 localId) external {
+        _keepId = localId;
+    }
+
+    function _completesAfterSuccess(bytes32 localId) internal view override returns (bool) {
+        return localId != _keepId;
     }
 }
 
@@ -165,10 +192,12 @@ contract BehaviorEngineTest is Test {
 
     function test_oneHonestNone() public {
         agent.installBehavior(idA, address(noneA));
+        vm.expectEmit(true, false, false, true, address(agent));
+        emit ExternalApplicationBehaviorHost.BehaviorUninstalled(idA, address(noneA));
         agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
         assertEq(agent.effects(), 1);
-        assertEq(agent.installedBehaviorCount(), 1);
-        assertEq(agent.installedBehaviorAt(0), idA);
+        assertEq(agent.installedBehaviorCount(), 0);
+        assertEq(agent.behaviorImplementation(idA), address(0));
     }
 
     function test_twoHonestNoneInInstallOrder() public {
@@ -182,8 +211,63 @@ contract BehaviorEngineTest is Test {
         );
         agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
         assertEq(agent.effects(), 1);
+        assertEq(agent.installedBehaviorCount(), 0);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+        assertEq(agent.behaviorImplementation(idB), address(0));
+    }
+
+    function test_secondStepAfterCompletionIsEmptyPoolNoOp() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 0
+        );
+        agent.runBehaviorStep(_explicit(), 0);
+        agent.runBehaviorStep(_explicit(), type(uint256).max);
+        assertEq(agent.effects(), 3);
+        assertEq(agent.installedBehaviorCount(), 0);
+    }
+
+    function test_primitiveAfterEngineCompletionRevertsNotInstalled() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        vm.expectRevert(BehaviorMembership.NotInstalled.selector);
+        agent.runExternalBehavior(idA, _explicit(), DEFAULT_EXTERNAL_BEHAVIOR_GAS);
+    }
+
+    function test_reinstallAfterCompletionIsNewOneShot() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        agent.installBehavior(idA, address(noneA));
+        assertEq(agent.installedBehaviorCount(), 1);
         assertEq(agent.installedBehaviorAt(0), idA);
-        assertEq(agent.installedBehaviorAt(1), idB);
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 0);
+        assertEq(agent.effects(), 2);
+    }
+
+    function test_hostWithoutEngineDoesNotOneShot() public {
+        hostOnly.installBehavior(idA, address(noneA));
+        BehaviorContext memory ctx = ContextLib.explicitTrigger(address(hostOnly), keeper);
+        hostOnly.runExternalBehavior(idA, ctx, DEFAULT_EXTERNAL_BEHAVIOR_GAS);
+        hostOnly.runExternalBehavior(idA, ctx, DEFAULT_EXTERNAL_BEHAVIOR_GAS);
+        assertEq(hostOnly.behaviorImplementation(idA), address(noneA));
+    }
+
+    function test_completesAfterSuccessHookCanRetainInstallation() public {
+        EngineWithKeepId mixed = new EngineWithKeepId();
+        mixed.installBehavior(idA, address(noneA));
+        mixed.installBehavior(idB, address(noneB));
+        mixed.keepAfterSuccess(idB);
+        BehaviorContext memory ctx = ContextLib.explicitTrigger(address(mixed), keeper);
+        mixed.runBehaviorStep(ctx, DEFAULT_STEP_GAS);
+        assertEq(mixed.installedBehaviorCount(), 1);
+        assertEq(mixed.installedBehaviorAt(0), idB);
+        assertEq(mixed.behaviorImplementation(idA), address(0));
+        assertEq(mixed.behaviorImplementation(idB), address(noneB));
+        mixed.runBehaviorStep(ctx, DEFAULT_STEP_GAS);
+        assertEq(mixed.installedBehaviorCount(), 1);
+        assertEq(mixed.installedBehaviorAt(0), idB);
     }
 
     function test_equalSplitDoesNotOverfundStrategy() public {
@@ -193,6 +277,7 @@ contract BehaviorEngineTest is Test {
         agent.installBehavior(idB, address(probe));
         agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
         assertEq(agent.effects(), 1);
+        assertEq(agent.installedBehaviorCount(), 0);
     }
 
     function test_failFastLoopDoesNotCallSecond() public {
@@ -212,6 +297,9 @@ contract BehaviorEngineTest is Test {
         );
         assertGt(gasRemaining, 10_000);
         assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.installedBehaviorAt(0), idA);
+        assertEq(agent.installedBehaviorAt(1), idB);
     }
 
     function test_failFastActionLibDoesNotCallSecond() public {
@@ -225,6 +313,9 @@ contract BehaviorEngineTest is Test {
         vm.expectRevert(ActionLib.UnknownKind.selector);
         agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
         assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.behaviorImplementation(idA), address(unknownKind));
+        assertEq(agent.behaviorImplementation(idB), address(reverting));
     }
 
     function test_zeroStepGasWithBehaviorsReverts() public {
@@ -235,6 +326,7 @@ contract BehaviorEngineTest is Test {
         vm.expectRevert(BehaviorEngine.InvalidStepGas.selector);
         agent.runBehaviorStep(_explicit(), 0);
         assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 1);
     }
 
     function test_perZeroRevertsInvalidStepGas() public {
@@ -243,6 +335,7 @@ contract BehaviorEngineTest is Test {
         vm.expectRevert(BehaviorEngine.InvalidStepGas.selector);
         agent.runBehaviorStep(_explicit(), 1);
         assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 2);
     }
 
     function test_maxStepGasRevertsInvalidStepGasNotPanic() public {
@@ -253,6 +346,7 @@ contract BehaviorEngineTest is Test {
         vm.expectRevert(BehaviorEngine.InvalidStepGas.selector);
         agent.runBehaviorStep(_explicit(), type(uint256).max);
         assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 1);
     }
 
     function test_uninstallMiddlePreservesRelativeOrder() public {
@@ -264,15 +358,25 @@ contract BehaviorEngineTest is Test {
         assertEq(agent.installedBehaviorAt(0), idA);
         assertEq(agent.installedBehaviorAt(1), idC);
         assertEq(agent.behaviorImplementation(idB), address(0));
+        agent.installBehavior(idB, address(noneB));
+        assertEq(agent.installedBehaviorAt(0), idA);
+        assertEq(agent.installedBehaviorAt(1), idC);
+        assertEq(agent.installedBehaviorAt(2), idB);
+    }
+
+    function test_stepCompletesSurvivorsAfterManualUninstall() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneA));
+        agent.uninstallBehavior(idB);
         vm.expectCall(
             address(noneB), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 0
         );
         agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
         assertEq(agent.effects(), 1);
-        agent.installBehavior(idB, address(noneB));
-        assertEq(agent.installedBehaviorAt(0), idA);
-        assertEq(agent.installedBehaviorAt(1), idC);
-        assertEq(agent.installedBehaviorAt(2), idB);
+        assertEq(agent.installedBehaviorCount(), 0);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+        assertEq(agent.behaviorImplementation(idC), address(0));
     }
 
     function test_ninthEngineInstallReverts() public {
@@ -298,6 +402,7 @@ contract BehaviorEngineTest is Test {
         m.logicalSender = keccak256("logical");
         agent.runFromMessage(makeAddr("inbound"), m, DEFAULT_STEP_GAS);
         assertEq(agent.effects(), 1);
+        assertEq(agent.installedBehaviorCount(), 0);
     }
 
     function test_handleDoesNotInvokeDecide() public {
@@ -309,6 +414,8 @@ contract BehaviorEngineTest is Test {
         m.conversationId = keccak256("no-dispatch");
         agent.handle(m);
         assertEq(agent.effects(), 0);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.behaviorImplementation(idA), address(noneA));
     }
 
     function test_noneStepDoesNotWriteRequestSession() public {
@@ -319,6 +426,7 @@ contract BehaviorEngineTest is Test {
         );
         RequestAgent.Status memory st = requester.requestStatus(conversationId);
         assertEq(uint8(st.phase), uint8(RequestPhase.None));
+        assertEq(requester.installedBehaviorCount(), 0);
     }
 
     function test_uninitializedContextRevertsWhenPoolNonEmpty() public {
