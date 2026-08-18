@@ -21,10 +21,13 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
     bytes32[] internal _orderedBehaviorIds;
     /// @dev Installation lifetime. Absent/false = OneShot. Not a property of the strategy.
     mapping(bytes32 localId => bool cyclic) internal _cyclic;
+    /// @dev Resume for `_runBehaviorStepAtMost` when k < n. Unused by walk-all.
+    uint256 internal _resumeIndex;
 
     error TooManyBehaviors();
     error InvalidStepGas();
     error InvalidBehaviorIndex();
+    error InvalidMaxToRun();
 
     function installedBehaviorCount() public view returns (uint256) {
         return _orderedBehaviorIds.length;
@@ -103,6 +106,75 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
                 _uninstallBehavior(snapshot[i]);
             }
         }
+    }
+
+    /// @dev Bounded window on an already-triggered step. Not `handle` dispatch. Not a JADE scheduler.
+    ///      `n == 0` is a no-op. `maxToRun == 0` with `n > 0` reverts `InvalidMaxToRun`.
+    ///      `maxToRun >= n` is walk-all and does not move `_resumeIndex`.
+    function _runBehaviorStepAtMost(BehaviorContext memory ctx, uint256 stepGas, uint256 maxToRun)
+        internal
+    {
+        uint256 n = _orderedBehaviorIds.length;
+        if (n == 0) {
+            return;
+        }
+        if (maxToRun == 0) {
+            revert InvalidMaxToRun();
+        }
+        uint256 k = maxToRun > n ? n : maxToRun;
+        if (k == n) {
+            _runBehaviorStep(ctx, stepGas);
+            return;
+        }
+
+        if (stepGas == 0) {
+            revert InvalidStepGas();
+        }
+        uint256 per = stepGas / k;
+        if (per == 0) {
+            revert InvalidStepGas();
+        }
+
+        uint256 remaining = gasleft();
+        if (remaining <= ENGINE_OVERHEAD) {
+            revert InvalidStepGas();
+        }
+        uint256 usable = remaining - ENGINE_OVERHEAD;
+        if (POST_CALL_OVERHEAD > type(uint256).max / k) {
+            revert InvalidStepGas();
+        }
+        uint256 hostReserve = k * POST_CALL_OVERHEAD;
+        if (usable <= hostReserve || stepGas > usable - hostReserve) {
+            revert InvalidStepGas();
+        }
+
+        uint256 start = _resumeIndex % n;
+        bytes32[] memory selected = new bytes32[](k);
+        for (uint256 i = 0; i < k; ++i) {
+            selected[i] = _orderedBehaviorIds[(start + i) % n];
+        }
+        // Identity of the first unselected snapshot member. Not `(start+k)%n` after OneShot compact.
+        bytes32 nextId = _orderedBehaviorIds[(start + k) % n];
+
+        for (uint256 i = 0; i < k; ++i) {
+            _runExternalBehavior(selected[i], ctx, per);
+        }
+        for (uint256 i = 0; i < k; ++i) {
+            if (_completesAfterSuccess(selected[i])) {
+                _uninstallBehavior(selected[i]);
+            }
+        }
+        _resumeIndex = _indexOfInstalled(nextId);
+    }
+
+    function _indexOfInstalled(bytes32 localId) private view returns (uint256) {
+        uint256 n = _orderedBehaviorIds.length;
+        for (uint256 i = 0; i < n; ++i) {
+            if (_orderedBehaviorIds[i] == localId) {
+                return i;
+            }
+        }
+        revert InvalidBehaviorIndex();
     }
 
     function _removePreservingOrder(bytes32 localId) private {
