@@ -49,8 +49,14 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
     }
 
     function _uninstallBehavior(bytes32 localId) internal virtual override {
-        super._uninstallBehavior(localId);
+        _clearBehaviorRecord(localId);
         _removePreservingOrder(localId);
+    }
+
+    /// @dev Same per-id cleanup as explicit uninstall (implementation mapping, event, `_cyclic`).
+    ///      Does not touch `_orderedBehaviorIds`. Step completion uses this plus one compact pass.
+    function _clearBehaviorRecord(bytes32 localId) private {
+        super._uninstallBehavior(localId);
         delete _cyclic[localId];
     }
 
@@ -101,11 +107,7 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
             _runExternalBehavior(snapshot[i], ctx, per);
         }
 
-        for (uint256 i = 0; i < n; ++i) {
-            if (_completesAfterSuccess(snapshot[i])) {
-                _uninstallBehavior(snapshot[i]);
-            }
-        }
+        _compactCompletedSelected(snapshot);
     }
 
     /// @dev Bounded window on an already-triggered step. Not `handle` dispatch. Not a JADE scheduler.
@@ -159,12 +161,52 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
         for (uint256 i = 0; i < k; ++i) {
             _runExternalBehavior(selected[i], ctx, per);
         }
-        for (uint256 i = 0; i < k; ++i) {
+        _compactCompletedSelected(selected);
+        _resumeIndex = _indexOfInstalled(nextId);
+    }
+
+    /// @dev Compact the **full** pool, removing only selected ids that complete after this step.
+    ///      Unselected members stay, even OneShots. Preserves relative order of survivors.
+    ///      If no selected id completes, the ordered array is left untouched.
+    function _compactCompletedSelected(bytes32[] memory selected) private {
+        bool anyCompletes;
+        for (uint256 i = 0; i < selected.length; ++i) {
             if (_completesAfterSuccess(selected[i])) {
-                _uninstallBehavior(selected[i]);
+                anyCompletes = true;
+                break;
             }
         }
-        _resumeIndex = _indexOfInstalled(nextId);
+        if (!anyCompletes) {
+            return;
+        }
+
+        uint256 writeIndex;
+        uint256 n = _orderedBehaviorIds.length;
+        bool allSelected = selected.length == n;
+        for (uint256 i = 0; i < n; ++i) {
+            bytes32 localId = _orderedBehaviorIds[i];
+            if ((allSelected || _isSelected(localId, selected)) && _completesAfterSuccess(localId))
+            {
+                _clearBehaviorRecord(localId);
+            } else {
+                if (writeIndex != i) {
+                    _orderedBehaviorIds[writeIndex] = localId;
+                }
+                ++writeIndex;
+            }
+        }
+        while (_orderedBehaviorIds.length > writeIndex) {
+            _orderedBehaviorIds.pop();
+        }
+    }
+
+    function _isSelected(bytes32 localId, bytes32[] memory selected) private pure returns (bool) {
+        for (uint256 i = 0; i < selected.length; ++i) {
+            if (selected[i] == localId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function _indexOfInstalled(bytes32 localId) private view returns (uint256) {

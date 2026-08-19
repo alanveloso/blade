@@ -838,6 +838,25 @@ contract BehaviorEngineTest is Test {
         assertEq(agent.effects(), 2);
     }
 
+    function test_walkAllCompactKeepsCyclicPairInRelativeOrder() public {
+        agent.installBehavior(idA, address(noneA));
+        agent.installCyclicBehavior(idB, address(noneB));
+        agent.installBehavior(idC, address(noneC));
+        agent.installCyclicBehavior(idD, address(noneD));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.installedBehaviorAt(1), idD);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+        assertEq(agent.behaviorImplementation(idC), address(0));
+        agent.installBehavior(idA, address(noneA));
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        assertEq(agent.installedBehaviorAt(1), idD);
+        assertEq(agent.behaviorImplementation(idA), address(0));
+    }
+
     function test_handleStillDoesNotDispatchAtMostPool() public {
         agent.installBehavior(idA, address(noneA));
         agent.installCyclicBehavior(idB, address(noneB));
