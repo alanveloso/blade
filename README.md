@@ -38,13 +38,21 @@ Message / authorized Explicit transaction
         -> BehaviorEngine step
         -> bounded STATICCALL to an installed stateless strategy
         -> validated Action
+        -> trusted Agent-owned application-effect hook
 ```
 
 The engine supports agent-local installations, OneShot lifetime by default, opt-in Cyclic
 re-eligibility across later triggers, bounded walk/at-most dispatch, per-step gas partitioning,
-bounded returndata, and an optional immutable external-executor gate. `Action` currently exposes
-only `None`; application-effect dispatch is intentionally a later slice. Protocol-role Behavior
-adapters are also later work.
+bounded returndata, and an optional immutable external-executor gate. `Action` exposes `None` plus
+a deliberately generic `Application` proposal. An untrusted strategy can only propose application
+data under `STATICCALL`; the leaf Agent decides how (or whether) that data becomes a storage effect.
+The default application-action hook denies the proposal, so unsupported effects are never silently
+accepted. Protocol-role Behavior adapters are later work and protocol legality is not encoded in
+application Action kinds.
+
+`examples/BehaviorExample.sol` is the minimal end-to-end Behavior example: an authorized Explicit
+trigger and a native Message trigger run OneShot/Cyclic strategies and commit a counter update only
+through the trusted Agent-owned effect hook.
 
 The matched embedded locus used for architectural comparison is a **test/research baseline** under
 `test/baselines/`, not a second production runtime.

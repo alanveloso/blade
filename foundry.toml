@@ -19,3 +19,7 @@ fail_on_revert = true
 
 [fmt]
 line_length = 100
+
+# Experimental compiler-only benchmark profile. Default remains via_ir=false.
+[profile.via_ir]
+via_ir = true

@@ -18,6 +18,14 @@ contract InvariantNoneStrategy is IExternalApplicationStrategy {
     }
 }
 
+contract InvariantApplicationStrategy is IExternalApplicationStrategy {
+    function decide(BehaviorContext calldata ctx) external view returns (Action memory a) {
+        if (msg.sender != ctx.agent) revert("identity");
+        a.kind = uint8(Kind.Application);
+        a.data = abi.encode(uint256(1));
+    }
+}
+
 contract InvariantRevertingStrategy is IExternalApplicationStrategy {
     function decide(BehaviorContext calldata) external pure returns (Action memory) {
         revert("strategy");
@@ -33,6 +41,7 @@ contract InvariantInvalidStrategy is IExternalApplicationStrategy {
 /// @dev Test-only inspection/execution surface for stateful Behavior invariants.
 contract BehaviorInvariantAgent is ExplicitExecutorGate {
     uint256 internal immutable _stepGas;
+    uint256 public applicationEffects;
 
     constructor(address executor_, uint256 stepGas_)
         Agent(address(0))
@@ -70,6 +79,14 @@ contract BehaviorInvariantAgent is ExplicitExecutorGate {
     function resumeIndex() external view returns (uint256) {
         return _resumeIndex;
     }
+
+    function _onApplicationAction(bytes32, BehaviorContext memory, bytes memory data)
+        internal
+        override
+    {
+        if (data.length != 32) revert("application-payload");
+        applicationEffects += abi.decode(data, (uint256));
+    }
 }
 
 /// @dev Random install/uninstall/trigger sequences. Invalid operations are caught; the handler
@@ -77,6 +94,7 @@ contract BehaviorInvariantAgent is ExplicitExecutorGate {
 contract BehaviorHandler is Test {
     BehaviorInvariantAgent public agent;
     InvariantNoneStrategy public noneStrategy;
+    InvariantApplicationStrategy public applicationStrategy;
     InvariantRevertingStrategy public revertingStrategy;
     InvariantInvalidStrategy public invalidStrategy;
 
@@ -89,6 +107,7 @@ contract BehaviorHandler is Test {
     constructor() {
         agent = new BehaviorInvariantAgent(address(this), INVARIANT_STEP_GAS);
         noneStrategy = new InvariantNoneStrategy();
+        applicationStrategy = new InvariantApplicationStrategy();
         revertingStrategy = new InvariantRevertingStrategy();
         invalidStrategy = new InvariantInvalidStrategy();
         for (uint256 i = 0; i < INVARIANT_ID_COUNT; ++i) {
@@ -186,15 +205,16 @@ contract BehaviorHandler is Test {
     }
 
     function _strategy(uint8 sel) internal view returns (address) {
-        uint256 mode = uint256(sel) % 3;
+        uint256 mode = uint256(sel) % 4;
         if (mode == 0) return address(noneStrategy);
-        if (mode == 1) return address(revertingStrategy);
+        if (mode == 1) return address(applicationStrategy);
+        if (mode == 2) return address(revertingStrategy);
         return address(invalidStrategy);
     }
 
     function _digest() internal view returns (bytes32) {
         uint256 n = agent.installedBehaviorCount();
-        bytes memory state = abi.encode(n, agent.resumeIndex());
+        bytes memory state = abi.encode(n, agent.resumeIndex(), agent.applicationEffects());
         for (uint256 i = 0; i < INVARIANT_ID_COUNT; ++i) {
             bytes32 id = ids[i];
             state = bytes.concat(

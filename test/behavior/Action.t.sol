@@ -59,9 +59,25 @@ contract ActionTest is Test {
         a.kind = uint8(Kind.None);
     }
 
+    function _application(bytes memory data) internal pure returns (Action memory a) {
+        a.kind = uint8(Kind.Application);
+        a.data = data;
+    }
+
     function test_noneEmptyIsValid() public view {
         harness.validate(_none());
         assertEq(uint8(harness.kindOf(_none())), uint8(Kind.None));
+    }
+
+    function test_applicationPayloadIsValidEnvelope() public view {
+        Action memory a = _application(abi.encode(uint256(7)));
+        harness.validate(a);
+        assertEq(uint8(harness.kindOf(a)), uint8(Kind.Application));
+    }
+
+    function test_applicationRequiresTrustedHostToApply() public {
+        vm.expectRevert(ActionLib.ApplicationRequiresHost.selector);
+        harness.applyAction(_application(abi.encode(uint256(7))));
     }
 
     function test_noneWithDataReverts() public {
@@ -73,13 +89,13 @@ contract ActionTest is Test {
 
     function test_unknownKindReverts() public {
         Action memory a;
-        a.kind = 1;
+        a.kind = type(uint8).max;
         vm.expectRevert(ActionLib.UnknownKind.selector);
         harness.validate(a);
     }
 
     function testFuzz_unknownKindReverts(uint8 kind, bytes calldata data) public {
-        vm.assume(kind != uint8(Kind.None));
+        vm.assume(kind != uint8(Kind.None) && kind != uint8(Kind.Application));
         Action memory a;
         a.kind = kind;
         a.data = data;
@@ -89,7 +105,7 @@ contract ActionTest is Test {
 
     function test_unknownKindWithDataRevertsUnknownKindNotNoneRule() public {
         Action memory a;
-        a.kind = 2;
+        a.kind = type(uint8).max;
         a.data = hex"dead";
         vm.expectRevert(ActionLib.UnknownKind.selector);
         harness.validate(a);
@@ -102,7 +118,7 @@ contract ActionTest is Test {
 
     function test_invalidDoesNotIncrementEffects() public {
         Action memory a;
-        a.kind = 1;
+        a.kind = type(uint8).max;
         vm.expectRevert(ActionLib.UnknownKind.selector);
         probe.applyAction(a);
         assertEq(probe.effects(), 0);
