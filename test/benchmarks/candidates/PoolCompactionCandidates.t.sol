@@ -23,9 +23,8 @@ contract CandidateApplicationStrategy is IExternalApplicationStrategy {
     }
 }
 
-/// @dev Experimental C4 only. Product `src/` remains the control.
-///      Decisions still use the full snapshot in insertion order; completion compacts survivors
-///      once, preserving their relative order, instead of shift+pop per completed OneShot.
+/// @dev Historical C4 candidate. Product `BehaviorEngine` now uses the same order-preserving
+///      compact idea; this copy remains for campaign-era benches.
 abstract contract BatchCompactionBehaviorEngine is BehaviorEngine {
     function _runBehaviorStepBatch(BehaviorContext memory ctx, uint256 stepGas) internal {
         uint256 n = _orderedBehaviorIds.length;
@@ -92,6 +91,36 @@ abstract contract SwapAndPopBehaviorEngine is BehaviorEngine {
         }
         revert NotInstalled();
     }
+
+    /// @dev Counterfactual step: still completes via `_uninstallBehavior` (swap-and-pop).
+    ///      Product `_runBehaviorStep` no longer uses that path.
+    function _runSwapStep(BehaviorContext memory ctx, uint256 stepGas) internal {
+        uint256 n = _orderedBehaviorIds.length;
+        if (n == 0) return;
+        if (stepGas == 0) revert InvalidStepGas();
+        uint256 per = stepGas / n;
+        if (per == 0) revert InvalidStepGas();
+
+        uint256 remaining = gasleft();
+        if (remaining <= ENGINE_OVERHEAD) revert InvalidStepGas();
+        uint256 usable = remaining - ENGINE_OVERHEAD;
+        if (POST_CALL_OVERHEAD > type(uint256).max / n) revert InvalidStepGas();
+        uint256 hostReserve = n * POST_CALL_OVERHEAD;
+        if (usable <= hostReserve || stepGas > usable - hostReserve) revert InvalidStepGas();
+
+        bytes32[] memory snapshot = new bytes32[](n);
+        for (uint256 i = 0; i < n; ++i) {
+            snapshot[i] = _orderedBehaviorIds[i];
+        }
+        for (uint256 i = 0; i < n; ++i) {
+            _runExternalBehavior(snapshot[i], ctx, per);
+        }
+        for (uint256 i = 0; i < n; ++i) {
+            if (_completesAfterSuccess(snapshot[i])) {
+                _uninstallBehavior(snapshot[i]);
+            }
+        }
+    }
 }
 
 contract BatchCandidateAgent is BatchCompactionBehaviorEngine {
@@ -122,7 +151,7 @@ contract SwapCandidateAgent is SwapAndPopBehaviorEngine {
     }
 
     function runAll(BehaviorContext memory ctx) external {
-        _runBehaviorStep(ctx, CANDIDATE_STEP_GAS);
+        _runSwapStep(ctx, CANDIDATE_STEP_GAS);
     }
 
     function runAtMost(BehaviorContext memory ctx, uint256 maxToRun) external {
