@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Action, ActionLib} from "./Action.sol";
+import {Action} from "./Action.sol";
 import {BehaviorContext, ContextLib} from "./Context.sol";
 import {IExternalApplicationStrategy} from "./IExternalApplicationStrategy.sol";
 import {BehaviorMembership} from "./BehaviorMembership.sol";
+import {BehaviorActionDispatcher} from "./BehaviorActionDispatcher.sol";
 
 /// @title Opt-in local installation of reusable external application strategies.
 /// @dev Capability mixin: does not inherit `Agent`. A concrete agent composes both.
@@ -12,10 +13,11 @@ import {BehaviorMembership} from "./BehaviorMembership.sol";
 ///      (EIP-150 may deliver less than requested). Strategy revert data is not bubbled.
 /// @dev `MAX_STRATEGY_RETURN` bounds the external execution copy; it is not a semantic
 ///      maximum for `Action.data`.
-abstract contract ExternalApplicationBehaviorHost is BehaviorMembership {
+abstract contract ExternalApplicationBehaviorHost is BehaviorMembership, BehaviorActionDispatcher {
     /// @dev Operational cap on success returndata copied from an untrusted STATICCALL.
     uint256 internal constant MAX_STRATEGY_RETURN = 1024;
-    /// @dev Defensive host reserve so a drained stipend still yields a BLADE error. Not scheduling policy.
+    /// @dev Defensive host reserve so a drained stipend still yields a BLADE error.
+    ///      Not scheduling policy.
     uint256 internal constant POST_CALL_OVERHEAD = 50_000;
 
     mapping(bytes32 localId => address implementation) internal _behaviors;
@@ -106,7 +108,7 @@ abstract contract ExternalApplicationBehaviorHost is BehaviorMembership {
             returndatacopy(add(ret, 0x20), 0, size)
         }
 
-        ActionLib.applyAction(_decodeAction(ret));
+        _dispatchBehaviorAction(localId, ctx, _decodeAction(ret));
     }
 
     /// @dev Canonical ABI for `returns (Action)` is `abi.encode(Action)`: outer offset 32,

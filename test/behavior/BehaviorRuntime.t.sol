@@ -86,7 +86,7 @@ contract NoneStrategyB is IExternalApplicationStrategy {
 
 contract UnknownKindStrategy is IExternalApplicationStrategy {
     function decide(BehaviorContext calldata) external pure returns (Action memory a) {
-        a.kind = 1;
+        a.kind = type(uint8).max;
     }
 }
 

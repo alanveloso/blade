@@ -28,6 +28,7 @@ contract NoneStrategy is IExternalApplicationStrategy {
 
 contract ScriptedEmbedded is Agent, EmbeddedApplicationBehaviorHost {
     uint256 public effects;
+    uint256 public applicationTotal;
     mapping(bytes32 => uint8) internal _kind;
     mapping(bytes32 => bytes) internal _data;
     mapping(bytes32 => bool) internal _revertHook;
@@ -67,6 +68,14 @@ contract ScriptedEmbedded is Agent, EmbeddedApplicationBehaviorHost {
         }
         a.kind = _kind[localId];
         a.data = _data[localId];
+    }
+
+    function _onApplicationAction(bytes32, BehaviorContext memory, bytes memory data)
+        internal
+        override
+    {
+        if (data.length != 32) revert("payload");
+        applicationTotal += abi.decode(data, (uint256));
     }
 }
 
@@ -185,6 +194,14 @@ contract EmbeddedApplicationBehaviorTest is Test {
         assertEq(embedded.effects(), 1);
     }
 
+    function test_applicationActionUsesSameTrustedDispatchBoundary() public {
+        embedded.installEmbeddedBehavior(idA);
+        embedded.script(idA, uint8(Kind.Application), abi.encode(uint256(5)), false);
+        embedded.runEmbeddedBehavior(idA, _explicit(address(embedded)));
+        assertEq(embedded.applicationTotal(), 5);
+        assertEq(embedded.effects(), 1);
+    }
+
     function test_pairedNoneSameActionAndEffect() public {
         dual.installBehavior(idA, address(noneStrategy));
         dual.installEmbeddedBehavior(idB);
@@ -198,7 +215,7 @@ contract EmbeddedApplicationBehaviorTest is Test {
 
     function test_unknownKindRevertsActionLib() public {
         embedded.installEmbeddedBehavior(idA);
-        embedded.script(idA, 1, "", false);
+        embedded.script(idA, type(uint8).max, "", false);
         vm.expectRevert(ActionLib.UnknownKind.selector);
         embedded.runEmbeddedBehavior(idA, _explicit(address(embedded)));
         assertEq(embedded.effects(), 0);
@@ -248,7 +265,7 @@ contract EmbeddedApplicationBehaviorTest is Test {
         embedded.installEmbeddedBehavior(idA);
         embedded.installEmbeddedBehavior(idB);
         embedded.script(idA, uint8(Kind.None), "", false);
-        embedded.script(idB, 1, "", false);
+        embedded.script(idB, type(uint8).max, "", false);
         embedded.runEmbeddedBehavior(idA, _explicit(address(embedded)));
         vm.expectRevert(ActionLib.UnknownKind.selector);
         embedded.runEmbeddedBehavior(idB, _explicit(address(embedded)));

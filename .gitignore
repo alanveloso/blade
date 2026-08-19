@@ -12,3 +12,6 @@ broadcast
 # Local Cursor evolution pack files (not part of the public framework)
 CURSOR_EVOLUTION_README.md
 PACKAGE_SHA256SUMS.txt
+
+# Local engineering campaign output
+local-evidence/
