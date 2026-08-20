@@ -30,6 +30,8 @@ Minimal patterns: `examples/RequestExample.sol`, `examples/ContractNetExample.so
 BLADE includes an opt-in reactive Behavior runtime with external
 read-only strategies, OneShot and Cyclic lifetimes, Message and
 Explicit triggers, bounded execution, and application-owned Action dispatch.
+Installations may restrict which trigger, protocol, and performative they
+accept; unmatched behaviors are not executed.
 
 Behavior v1 snapshot: `e88ab37f754c2313d97f48184944624b1ab5d03d`.
 
