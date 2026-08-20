@@ -25,40 +25,16 @@ Being Contract Net **manager and participant of the same Contract Net conversati
 
 Minimal patterns: `examples/RequestExample.sol`, `examples/ContractNetExample.sol`, `examples/CompositeExample.sol`.
 
-## Experimental Behavior runtime
+## Behavior Runtime
 
-Post-snapshot development in `src/behavior/` adds an **opt-in reactive application-behavior runtime**.
-It does not change every `Agent` and does not claim a JADE cooperative scheduler.
+BLADE includes an opt-in reactive Behavior runtime with external
+read-only strategies, OneShot and Cyclic lifetimes, Message and
+Explicit triggers, bounded execution, and application-owned Action dispatch.
 
-Current product path:
+Behavior v1 snapshot: `e88ab37f754c2313d97f48184944624b1ab5d03d`.
 
-```text
-Message / authorized Explicit transaction
-        -> Agent-authored BehaviorContext
-        -> BehaviorEngine step
-        -> bounded STATICCALL to an installed stateless strategy
-        -> validated Action
-        -> trusted Agent-owned application-effect hook
-```
-
-The engine supports agent-local installations, OneShot lifetime by default, opt-in Cyclic
-re-eligibility across later triggers, bounded walk/at-most dispatch, per-step gas partitioning,
-bounded returndata, and an optional immutable external-executor gate. `Action` exposes `None` plus
-a deliberately generic `Application` proposal. An untrusted strategy can only propose application
-data under `STATICCALL`; the leaf Agent decides how (or whether) that data becomes a storage effect.
-The default application-action hook denies the proposal, so unsupported effects are never silently
-accepted. Protocol-role Behavior adapters are later work and protocol legality is not encoded in
-application Action kinds.
-
-`examples/BehaviorExample.sol` is the minimal end-to-end Behavior example: an authorized Explicit
-trigger and a native Message trigger run OneShot/Cyclic strategies and commit a counter update only
-through the trusted Agent-owned effect hook.
-
-The matched embedded locus used for architectural comparison is a **test/research baseline** under
-`test/baselines/`, not a second production runtime.
-
-Behavior code remains transaction-driven: contracts do not wake themselves, and time-based wake
-requires a later external transaction source.
+This runtime is reactive and does not implement autonomous scheduling
+or the complete JADE Behaviour model.
 
 ## Requirements
 
