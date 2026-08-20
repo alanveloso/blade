@@ -11,6 +11,19 @@ enum Trigger {
     Explicit
 }
 
+/// @dev Bit 0 = Message, bit 1 = Explicit. Zero mask is invalid.
+uint8 constant TRIGGER_MESSAGE = 1;
+uint8 constant TRIGGER_EXPLICIT = 2;
+/// @dev Wildcard for `protocol` / `performative`. Not `0`: `Performative.Request` is 0.
+uint8 constant FILTER_ANY = type(uint8).max;
+
+/// @dev Per-installation eligibility. Not a JADE MessageTemplate. Not protocol-role dispatch.
+struct BehaviorFilter {
+    uint8 triggerMask;
+    uint8 protocol;
+    uint8 performative;
+}
+
 /// @dev Agent-authored view a Behavior may observe. No `content`. Not a FIPA AID.
 /// @dev `ContextLib.validate` is shape/canonicalization, not authentication. The Agent is the trust source.
 struct BehaviorContext {
@@ -127,5 +140,57 @@ library ContextLib {
         ctx.agent = agent;
         ctx.transportCaller = transportCaller;
         validate(ctx);
+    }
+}
+
+library FilterLib {
+    error InvalidBehaviorFilter();
+
+    function anyFilter() internal pure returns (BehaviorFilter memory f) {
+        f.triggerMask = TRIGGER_MESSAGE | TRIGGER_EXPLICIT;
+        f.protocol = FILTER_ANY;
+        f.performative = FILTER_ANY;
+    }
+
+    function validate(BehaviorFilter memory f) internal pure {
+        uint8 allowed = TRIGGER_MESSAGE | TRIGGER_EXPLICIT;
+        if (f.triggerMask == 0 || (f.triggerMask & ~allowed) != 0) {
+            revert InvalidBehaviorFilter();
+        }
+        if (
+            f.triggerMask == TRIGGER_EXPLICIT
+                && (f.protocol != FILTER_ANY || f.performative != FILTER_ANY)
+        ) {
+            revert InvalidBehaviorFilter();
+        }
+    }
+
+    /// @dev Envelope fields apply only to Message triggers. Explicit matches the mask alone.
+    function matches(BehaviorFilter memory f, BehaviorContext memory ctx)
+        internal
+        pure
+        returns (bool)
+    {
+        uint8 bit;
+        if (ctx.trigger == uint8(Trigger.Message)) {
+            bit = TRIGGER_MESSAGE;
+        } else if (ctx.trigger == uint8(Trigger.Explicit)) {
+            bit = TRIGGER_EXPLICIT;
+        } else {
+            return false;
+        }
+        if ((f.triggerMask & bit) == 0) {
+            return false;
+        }
+        if (ctx.trigger == uint8(Trigger.Explicit)) {
+            return true;
+        }
+        if (f.protocol != FILTER_ANY && f.protocol != ctx.protocol) {
+            return false;
+        }
+        if (f.performative != FILTER_ANY && f.performative != ctx.performative) {
+            return false;
+        }
+        return true;
     }
 }

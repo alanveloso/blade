@@ -8,11 +8,20 @@ import {
 } from "../../src/behavior/ExternalApplicationBehaviorHost.sol";
 import {IExternalApplicationStrategy} from "../../src/behavior/IExternalApplicationStrategy.sol";
 import {Action, ActionLib, Kind} from "../../src/behavior/Action.sol";
-import {BehaviorContext, ContextLib} from "../../src/behavior/Context.sol";
+import {
+    BehaviorContext,
+    ContextLib,
+    BehaviorFilter,
+    FilterLib,
+    TRIGGER_MESSAGE,
+    TRIGGER_EXPLICIT,
+    FILTER_ANY
+} from "../../src/behavior/Context.sol";
 import {Agent} from "../../src/core/Agent.sol";
 import {RequestAgent, RequestPhase} from "../../src/core/RequestAgent.sol";
 import {Message} from "../../src/core/Message.sol";
 import {Performative} from "../../src/core/Performative.sol";
+import {Protocol} from "../../src/core/Protocol.sol";
 
 /// @dev Harness-only. Production engine has no hidden default step budget.
 uint256 constant DEFAULT_STEP_GAS = 200_000;
@@ -92,8 +101,22 @@ contract EngineAgent is Agent, BehaviorEngine {
         _installBehavior(localId, implementation);
     }
 
+    function installBehavior(bytes32 localId, address implementation, BehaviorFilter memory filter)
+        external
+    {
+        _installFilteredBehavior(localId, implementation, filter);
+    }
+
     function installCyclicBehavior(bytes32 localId, address implementation) external {
         _installCyclicBehavior(localId, implementation);
+    }
+
+    function installCyclicBehavior(
+        bytes32 localId,
+        address implementation,
+        BehaviorFilter memory filter
+    ) external {
+        _installCyclicBehavior(localId, implementation, filter);
     }
 
     function uninstallBehavior(bytes32 localId) external {
@@ -868,5 +891,123 @@ contract BehaviorEngineTest is Test {
         agent.handle(m);
         assertEq(agent.effects(), 0);
         assertEq(agent.installedBehaviorCount(), 2);
+    }
+
+    function _requestMsg() internal pure returns (Message memory m) {
+        m.performative = uint8(Performative.Request);
+        m.protocol = uint8(Protocol.FipaRequest);
+        m.conversationId = keccak256("req");
+    }
+
+    function _cfpMsg() internal pure returns (Message memory m) {
+        m.performative = uint8(Performative.Cfp);
+        m.protocol = uint8(Protocol.FipaContractNet);
+        m.conversationId = keccak256("cfp");
+    }
+
+    function test_messageOnlyFilterSkipsExplicit() public {
+        BehaviorFilter memory f;
+        f.triggerMask = TRIGGER_MESSAGE;
+        f.protocol = FILTER_ANY;
+        f.performative = FILTER_ANY;
+        agent.installBehavior(idA, address(noneA), f);
+        assertEq(agent.behaviorFilter(idA).triggerMask, TRIGGER_MESSAGE);
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        agent.runFromMessage(keeper, _requestMsg(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 0);
+    }
+
+    function test_explicitOnlyFilterSkipsMessage() public {
+        BehaviorFilter memory f;
+        f.triggerMask = TRIGGER_EXPLICIT;
+        f.protocol = FILTER_ANY;
+        f.performative = FILTER_ANY;
+        agent.installBehavior(idA, address(noneA), f);
+        agent.runFromMessage(keeper, _requestMsg(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        agent.runBehaviorStep(_explicit(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 0);
+    }
+
+    function test_protocolFilterSelectsRequestNotContractNet() public {
+        BehaviorFilter memory reqF;
+        reqF.triggerMask = TRIGGER_MESSAGE;
+        reqF.protocol = uint8(Protocol.FipaRequest);
+        reqF.performative = FILTER_ANY;
+        BehaviorFilter memory cnF;
+        cnF.triggerMask = TRIGGER_MESSAGE;
+        cnF.protocol = uint8(Protocol.FipaContractNet);
+        cnF.performative = FILTER_ANY;
+        agent.installBehavior(idA, address(noneA), reqF);
+        agent.installBehavior(idB, address(noneB), cnF);
+        agent.runFromMessage(keeper, _requestMsg(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.installedBehaviorAt(0), idB);
+        agent.runFromMessage(keeper, _cfpMsg(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 0);
+    }
+
+    function test_performativeZeroMeansRequestNotWildcard() public {
+        BehaviorFilter memory f;
+        f.triggerMask = TRIGGER_MESSAGE;
+        f.protocol = FILTER_ANY;
+        f.performative = uint8(Performative.Request);
+        agent.installBehavior(idA, address(noneA), f);
+        Message memory inform;
+        inform.performative = uint8(Performative.Inform);
+        inform.protocol = uint8(Protocol.FipaRequest);
+        inform.conversationId = keccak256("inf");
+        agent.runFromMessage(keeper, inform, DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        agent.runFromMessage(keeper, _requestMsg(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 0);
+    }
+
+    function test_unmatchedOneShotStaysInstalled() public {
+        BehaviorFilter memory f;
+        f.triggerMask = TRIGGER_MESSAGE;
+        f.protocol = uint8(Protocol.FipaRequest);
+        f.performative = FILTER_ANY;
+        agent.installBehavior(idA, address(noneA), f);
+        agent.runFromMessage(keeper, _cfpMsg(), DEFAULT_STEP_GAS);
+        assertEq(agent.installedBehaviorCount(), 1);
+        assertEq(agent.behaviorImplementation(idA), address(noneA));
+    }
+
+    function test_atMostCountsOnlyEligible() public {
+        BehaviorFilter memory msgOnly;
+        msgOnly.triggerMask = TRIGGER_MESSAGE;
+        msgOnly.protocol = FILTER_ANY;
+        msgOnly.performative = FILTER_ANY;
+        agent.installBehavior(idA, address(noneA), msgOnly);
+        agent.installBehavior(idB, address(noneB));
+        agent.installCyclicBehavior(idC, address(noneC));
+        vm.expectCall(
+            address(noneA), abi.encodeWithSelector(IExternalApplicationStrategy.decide.selector), 0
+        );
+        agent.runBehaviorStepAtMost(_explicit(), DEFAULT_STEP_GAS, 1);
+        assertEq(agent.installedBehaviorCount(), 2);
+        assertEq(agent.installedBehaviorAt(0), idA);
+        assertEq(agent.installedBehaviorAt(1), idC);
+        assertEq(agent.behaviorImplementation(idB), address(0));
+    }
+
+    function test_invalidTriggerMaskReverts() public {
+        BehaviorFilter memory f;
+        f.triggerMask = 0;
+        f.protocol = FILTER_ANY;
+        f.performative = FILTER_ANY;
+        vm.expectRevert(FilterLib.InvalidBehaviorFilter.selector);
+        agent.installBehavior(idA, address(noneA), f);
+    }
+
+    function test_explicitOnlyRejectsEnvelopeConstraint() public {
+        BehaviorFilter memory f;
+        f.triggerMask = TRIGGER_EXPLICIT;
+        f.protocol = uint8(Protocol.FipaRequest);
+        f.performative = FILTER_ANY;
+        vm.expectRevert(FilterLib.InvalidBehaviorFilter.selector);
+        agent.installBehavior(idA, address(noneA), f);
     }
 }

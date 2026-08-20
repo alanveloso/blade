@@ -2,11 +2,12 @@
 pragma solidity ^0.8.26;
 
 import {ExternalApplicationBehaviorHost} from "./ExternalApplicationBehaviorHost.sol";
-import {BehaviorContext} from "./Context.sol";
+import {BehaviorContext, BehaviorFilter, FilterLib, ContextLib} from "./Context.sol";
 
 /// @title Reactive application-behavior step (v0).
 /// @dev Not an autonomous scheduler. Not a protocol-role runtime. Does not inherit `Agent`.
-/// @dev v0 selection is `installed == selected` (insertion order). Not a general BLADE claim.
+/// @dev Default selection is still the full pool (any-filter). An installation may restrict
+///      trigger, protocol, and/or performative; ineligible ids are not called.
 /// @dev `stepGas` is the aggregate requested STATICCALL ceiling for strategies, not transaction gas.
 /// @dev v0 lifetimes are per installation, not per strategy address: `_installBehavior` is
 ///      OneShot; `_installCyclicBehavior` stays in the pool across explicit steps.
@@ -21,6 +22,7 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
     bytes32[] internal _orderedBehaviorIds;
     /// @dev Installation lifetime. Absent/false = OneShot. Not a property of the strategy.
     mapping(bytes32 localId => bool cyclic) internal _cyclic;
+    mapping(bytes32 localId => BehaviorFilter filter) internal _filters;
     /// @dev Resume for `_runBehaviorStepAtMost` when k < n. Unused by walk-all.
     uint256 internal _resumeIndex;
 
@@ -40,11 +42,25 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
         return _orderedBehaviorIds[index];
     }
 
+    function behaviorFilter(bytes32 localId) public view returns (BehaviorFilter memory) {
+        return _filters[localId];
+    }
+
     function _installBehavior(bytes32 localId, address implementation) internal virtual override {
+        _installFilteredBehavior(localId, implementation, FilterLib.anyFilter());
+    }
+
+    function _installFilteredBehavior(
+        bytes32 localId,
+        address implementation,
+        BehaviorFilter memory filter
+    ) internal {
+        FilterLib.validate(filter);
         if (_orderedBehaviorIds.length >= MAX_INSTALLED_APPLICATION_BEHAVIORS) {
             revert TooManyBehaviors();
         }
         super._installBehavior(localId, implementation);
+        _filters[localId] = filter;
         _orderedBehaviorIds.push(localId);
     }
 
@@ -58,11 +74,20 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
     function _clearBehaviorRecord(bytes32 localId) private {
         super._uninstallBehavior(localId);
         delete _cyclic[localId];
+        delete _filters[localId];
     }
 
     /// @dev Opt-in stay-in-pool lifetime. Reuses membership/cap/order from `_installBehavior`.
     function _installCyclicBehavior(bytes32 localId, address implementation) internal {
-        _installBehavior(localId, implementation);
+        _installCyclicBehavior(localId, implementation, FilterLib.anyFilter());
+    }
+
+    function _installCyclicBehavior(
+        bytes32 localId,
+        address implementation,
+        BehaviorFilter memory filter
+    ) internal {
+        _installFilteredBehavior(localId, implementation, filter);
         _cyclic[localId] = true;
     }
 
@@ -71,9 +96,54 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
         return !_cyclic[localId];
     }
 
-    /// @dev One explicit trigger. Does not dispatch from `handle`. Fail-fast; never `gas()`.
+    /// @dev One trigger. Does not dispatch from `handle`. Fail-fast; never `gas()`.
+    ///      Only filter-eligible installations run. Empty eligible set is a no-op.
     function _runBehaviorStep(BehaviorContext memory ctx, uint256 stepGas) internal {
+        if (_orderedBehaviorIds.length > 0) {
+            ContextLib.validate(ctx);
+        }
+        _runSelected(ctx, _eligibleFrom(ctx, 0), stepGas);
+    }
+
+    /// @dev Bounded window on an already-triggered step. Not `handle` dispatch. Not a JADE scheduler.
+    ///      Empty pool is a no-op. `maxToRun == 0` with `n > 0` reverts `InvalidMaxToRun`.
+    ///      Window size is among **eligible** ids. `maxToRun >= eligible` is filtered walk-all
+    ///      and does not move `_resumeIndex`.
+    function _runBehaviorStepAtMost(BehaviorContext memory ctx, uint256 stepGas, uint256 maxToRun)
+        internal
+    {
         uint256 n = _orderedBehaviorIds.length;
+        if (n == 0) {
+            return;
+        }
+        if (maxToRun == 0) {
+            revert InvalidMaxToRun();
+        }
+        ContextLib.validate(ctx);
+        uint256 start = _resumeIndex % n;
+        bytes32[] memory eligible = _eligibleFrom(ctx, start);
+        uint256 e = eligible.length;
+        if (e == 0) {
+            return;
+        }
+        if (maxToRun >= e) {
+            _runSelected(ctx, eligible, stepGas);
+            return;
+        }
+
+        bytes32[] memory selected = new bytes32[](maxToRun);
+        for (uint256 i = 0; i < maxToRun; ++i) {
+            selected[i] = eligible[i];
+        }
+        bytes32 nextId = eligible[maxToRun];
+        _runSelected(ctx, selected, stepGas);
+        _resumeIndex = _indexOfInstalled(nextId);
+    }
+
+    function _runSelected(BehaviorContext memory ctx, bytes32[] memory selected, uint256 stepGas)
+        private
+    {
+        uint256 n = selected.length;
         if (n == 0) {
             return;
         }
@@ -98,71 +168,36 @@ abstract contract BehaviorEngine is ExternalApplicationBehaviorHost {
             revert InvalidStepGas();
         }
 
-        bytes32[] memory snapshot = new bytes32[](n);
         for (uint256 i = 0; i < n; ++i) {
-            snapshot[i] = _orderedBehaviorIds[i];
+            _runExternalBehavior(selected[i], ctx, per);
         }
 
-        for (uint256 i = 0; i < n; ++i) {
-            _runExternalBehavior(snapshot[i], ctx, per);
-        }
-
-        _compactCompletedSelected(snapshot);
+        _compactCompletedSelected(selected);
     }
 
-    /// @dev Bounded window on an already-triggered step. Not `handle` dispatch. Not a JADE scheduler.
-    ///      `n == 0` is a no-op. `maxToRun == 0` with `n > 0` reverts `InvalidMaxToRun`.
-    ///      `maxToRun >= n` is walk-all and does not move `_resumeIndex`.
-    function _runBehaviorStepAtMost(BehaviorContext memory ctx, uint256 stepGas, uint256 maxToRun)
-        internal
+    /// @dev Eligible ids in pool order, starting at `start` and wrapping.
+    function _eligibleFrom(BehaviorContext memory ctx, uint256 start)
+        private
+        view
+        returns (bytes32[] memory selected)
     {
         uint256 n = _orderedBehaviorIds.length;
         if (n == 0) {
-            return;
+            return selected;
         }
-        if (maxToRun == 0) {
-            revert InvalidMaxToRun();
+        bytes32[] memory buf = new bytes32[](n);
+        uint256 m;
+        for (uint256 i = 0; i < n; ++i) {
+            bytes32 localId = _orderedBehaviorIds[(start + i) % n];
+            if (FilterLib.matches(_filters[localId], ctx)) {
+                buf[m] = localId;
+                ++m;
+            }
         }
-        uint256 k = maxToRun > n ? n : maxToRun;
-        if (k == n) {
-            _runBehaviorStep(ctx, stepGas);
-            return;
+        selected = new bytes32[](m);
+        for (uint256 i = 0; i < m; ++i) {
+            selected[i] = buf[i];
         }
-
-        if (stepGas == 0) {
-            revert InvalidStepGas();
-        }
-        uint256 per = stepGas / k;
-        if (per == 0) {
-            revert InvalidStepGas();
-        }
-
-        uint256 remaining = gasleft();
-        if (remaining <= ENGINE_OVERHEAD) {
-            revert InvalidStepGas();
-        }
-        uint256 usable = remaining - ENGINE_OVERHEAD;
-        if (POST_CALL_OVERHEAD > type(uint256).max / k) {
-            revert InvalidStepGas();
-        }
-        uint256 hostReserve = k * POST_CALL_OVERHEAD;
-        if (usable <= hostReserve || stepGas > usable - hostReserve) {
-            revert InvalidStepGas();
-        }
-
-        uint256 start = _resumeIndex % n;
-        bytes32[] memory selected = new bytes32[](k);
-        for (uint256 i = 0; i < k; ++i) {
-            selected[i] = _orderedBehaviorIds[(start + i) % n];
-        }
-        // Identity of the first unselected snapshot member. Not `(start+k)%n` after OneShot compact.
-        bytes32 nextId = _orderedBehaviorIds[(start + k) % n];
-
-        for (uint256 i = 0; i < k; ++i) {
-            _runExternalBehavior(selected[i], ctx, per);
-        }
-        _compactCompletedSelected(selected);
-        _resumeIndex = _indexOfInstalled(nextId);
     }
 
     /// @dev Compact the **full** pool, removing only selected ids that complete after this step.
