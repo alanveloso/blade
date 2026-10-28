@@ -30,6 +30,12 @@ contract CompositionTest is Test {
         m.conversationId = id;
     }
 
+    /// @dev Request as delivered: carries the token the initiator's Core assigned.
+    function _sent(bytes32 id, RequestAgent initiator) internal view returns (Message memory m) {
+        m = _req(id);
+        m.replyWith = initiator.requestStatus(id).replyWith;
+    }
+
     function _cfp(bytes32 id, uint64 by) internal pure returns (Message memory m) {
         m.performative = uint8(Performative.Cfp);
         m.protocol = uint8(Protocol.FipaContractNet);
@@ -59,7 +65,8 @@ contract CompositionTest is Test {
         bytes32 id = keccak256("comp-ri");
         self.startRequest(address(reqPeer), _req(id));
         assertEq(uint8(self.requestStatus(id).phase), uint8(RequestPhase.Requested));
-        reqPeer.respond(_req(id), address(self), _out(_req(id), Performative.Inform));
+        Message memory req = _sent(id, self);
+        reqPeer.respond(req, address(self), _out(req, Performative.Inform));
         assertEq(uint8(self.requestStatus(id).phase), uint8(RequestPhase.None));
     }
 
@@ -67,7 +74,8 @@ contract CompositionTest is Test {
         bytes32 id = keccak256("comp-rp");
         reqPeer.startRequest(address(self), _req(id));
         assertEq(uint8(self.requestStatus(id).phase), uint8(RequestPhase.Requested));
-        self.respond(_req(id), address(reqPeer), _out(_req(id), Performative.Inform));
+        Message memory req = _sent(id, reqPeer);
+        self.respond(req, address(reqPeer), _out(req, Performative.Inform));
         assertEq(uint8(self.requestStatus(id).phase), uint8(RequestPhase.None));
         assertEq(uint8(reqPeer.requestStatus(id).phase), uint8(RequestPhase.None));
     }
@@ -116,7 +124,8 @@ contract CompositionTest is Test {
         self.cfp(_one(address(cnPeer)), cfp);
         assertEq(uint8(self.requestStatus(reqId).phase), uint8(RequestPhase.Requested));
         assertEq(self.conversation(cnId).live, 1);
-        reqPeer.respond(_req(reqId), address(self), _out(_req(reqId), Performative.Refuse));
+        Message memory req = _sent(reqId, self);
+        reqPeer.respond(req, address(self), _out(req, Performative.Refuse));
         assertEq(uint8(self.requestStatus(reqId).phase), uint8(RequestPhase.None));
         assertEq(self.conversation(cnId).live, 1);
         cnPeer.respond(cfp, address(self), _out(cfp, Performative.Refuse));
@@ -162,7 +171,8 @@ contract CompositionTest is Test {
         self.cfp(_one(address(cnPeer)), cfp);
         assertEq(uint8(self.requestStatus(id).phase), uint8(RequestPhase.Requested));
         assertEq(self.conversation(id).live, 1);
-        reqPeer.respond(_req(id), address(self), _out(_req(id), Performative.Inform));
+        Message memory req = _sent(id, self);
+        reqPeer.respond(req, address(self), _out(req, Performative.Inform));
         assertEq(uint8(self.requestStatus(id).phase), uint8(RequestPhase.None));
         assertEq(self.conversation(id).live, 1);
         cnPeer.respond(cfp, address(self), _out(cfp, Performative.Refuse));

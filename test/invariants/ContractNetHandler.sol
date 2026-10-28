@@ -22,12 +22,16 @@ contract ContractNetHandler is Test {
     ExposedContractNetParticipant public p2;
     AutoCompleteParticipant public autoInform;
     ExposedContractNetParticipant public stranger;
+    /// @dev Invited like the others, but acts by calling `manager.handle` directly (bypassing its
+    /// own FSM). Its local session is therefore excluded from cross-contract phase checks.
+    ExposedContractNetParticipant public rogue;
 
     bytes32[N_IDS] internal ids;
     Message[N_IDS] internal lastCfp;
-    address[3] internal known;
+    address[4] internal known;
 
     uint256 public calls;
+    uint256 public successfulMutations;
 
     constructor() {
         manager = new ExposedContractNetManager(address(0));
@@ -35,11 +39,13 @@ contract ContractNetHandler is Test {
         p2 = new ExposedContractNetParticipant(address(0));
         autoInform = new AutoCompleteParticipant(uint8(Performative.Inform));
         stranger = new ExposedContractNetParticipant(address(0));
+        rogue = new ExposedContractNetParticipant(address(0));
         ids[0] = keccak256("inv-cn-0");
         ids[1] = keccak256("inv-cn-1");
         known[0] = address(p1);
         known[1] = address(p2);
         known[2] = address(autoInform);
+        known[3] = address(rogue);
         vm.warp(1_700_000_000);
     }
 
@@ -51,9 +57,15 @@ contract ContractNetHandler is Test {
         }
         Message memory m = _cfp(id, uint64(block.timestamp + 100));
         bytes32 beforeOther = _pack(ids[(uint256(idSel) + 1) % N_IDS]);
+        bytes32 beforeSelf = _pack(id);
+        uint8[4] memory slots = _slots(id);
         try manager.cfp(parts, m) {
             lastCfp[idSel % N_IDS] = m;
-        } catch {}
+            successfulMutations++;
+            _assertSteps(id, slots, Step.Cfp);
+        } catch {
+            assertEq(_pack(id), beforeSelf, "CN-P2 reverted cfp mutated");
+        }
         assertEq(_pack(ids[(uint256(idSel) + 1) % N_IDS]), beforeOther, "CN-I7 cfp sibling");
         calls++;
     }
@@ -75,7 +87,14 @@ contract ContractNetHandler is Test {
         bytes32 beforeOther = _pack(ids[(i + 1) % N_IDS]);
         address other = known[(uint256(pSel) + 1) % 3];
         uint8 slotPeer = manager.slotOf(id, other);
-        try p.respond(inbound, address(manager), outbound) {} catch {}
+        bytes32 beforeSelf = _pack(id);
+        uint8[4] memory slots = _slots(id);
+        try p.respond(inbound, address(manager), outbound) {
+            successfulMutations++;
+            _assertSteps(id, slots, Step.Message);
+        } catch {
+            assertEq(_pack(id), beforeSelf, "CN-P2 reverted respond mutated");
+        }
         assertEq(_pack(ids[(i + 1) % N_IDS]), beforeOther, "CN-I7 respond sibling");
         assertEq(manager.slotOf(id, other), slotPeer, "CN-I6 other slot");
         calls++;
@@ -107,7 +126,18 @@ contract ContractNetHandler is Test {
         address[] memory sil;
         (acc, rej, sil) = _partition(id, mode);
         bytes32 beforeOther = _pack(ids[(uint256(idSel) + 1) % N_IDS]);
-        try manager.evaluate(id, acc, rej, sil) {} catch {}
+        bytes32 beforeSelf = _pack(id);
+        uint8[4] memory slots = _slots(id);
+        try manager.evaluate(id, acc, rej, sil) {
+            successfulMutations++;
+            _assertSteps(id, slots, Step.Evaluate);
+            assertTrue(
+                manager.conversation(id).evaluated || manager.conversation(id).live == 0,
+                "CN-P1 evaluate left conversation unevaluated"
+            );
+        } catch {
+            assertEq(_pack(id), beforeSelf, "CN-P2 reverted evaluate mutated");
+        }
         assertEq(_pack(ids[(uint256(idSel) + 1) % N_IDS]), beforeOther, "CN-I7 evaluate sibling");
         calls++;
     }
@@ -131,6 +161,7 @@ contract ContractNetHandler is Test {
         uint8 phaseBefore = p.session(id).phase;
         uint64 by = p.session(id).replyBy;
         bytes32 beforeOther = _pack(ids[(uint256(idSel) + 1) % N_IDS]);
+        bytes32 beforeSelf = _pack(id);
         try p.expire(id) {
             assertEq(phaseBefore, ContractNetLib.PART_CFPED, "expire only CFPED");
             assertTrue(block.timestamp > by, "expire only after replyBy");
@@ -139,6 +170,7 @@ contract ContractNetHandler is Test {
             if (phaseBefore == ContractNetLib.PART_CFPED && by != 0 && block.timestamp > by) {
                 revert("expire should have succeeded");
             }
+            assertEq(_pack(id), beforeSelf, "CN-P2 reverted expire mutated");
         }
         assertEq(_pack(ids[(uint256(idSel) + 1) % N_IDS]), beforeOther, "CN-I7 expire sibling");
         calls++;
@@ -161,6 +193,52 @@ contract ContractNetHandler is Test {
         calls++;
     }
 
+    /// @dev Rogue invitee delivers any act straight to the manager. Only the manager's own checks
+    /// stand between it and the conversation state.
+    function rogueDirectHandle(uint8 idSel, uint8 act) external {
+        bytes32 id = ids[idSel % N_IDS];
+        bytes32 beforeSelf = _pack(id);
+        bytes32 beforeOther = _pack(ids[(uint256(idSel) + 1) % N_IDS]);
+        uint8[4] memory slots = _slots(id);
+        bool wasLive = manager.conversation(id).live != 0;
+        Message memory m;
+        uint8[8] memory acts = [
+            uint8(Performative.Propose),
+            uint8(Performative.Refuse),
+            uint8(Performative.NotUnderstood),
+            uint8(Performative.Inform),
+            uint8(Performative.Failure),
+            uint8(Performative.AcceptProposal),
+            uint8(Performative.Cfp),
+            200
+        ];
+        m.performative = acts[act % 8];
+        m.protocol = uint8(Protocol.FipaContractNet);
+        m.conversationId = id;
+        vm.prank(address(rogue));
+        try manager.handle(m) {
+            successfulMutations++;
+            assertTrue(wasLive, "CN-P3 act accepted on a finished conversation");
+            assertTrue(slots[3] != ContractNetLib.SLOT_NONE, "CN-P4 non-member act accepted");
+            uint8 a = m.performative;
+            uint8 s = slots[3];
+            bool fromInvited = s == ContractNetLib.SLOT_INVITED;
+            assertTrue(
+                (a == uint8(Performative.Propose) && fromInvited)
+                    || (a == uint8(Performative.Refuse) && fromInvited)
+                    || a == uint8(Performative.NotUnderstood)
+                    || ((a == uint8(Performative.Inform) || a == uint8(Performative.Failure))
+                        && s == ContractNetLib.SLOT_ACCEPTED),
+                "CN-P6 act not allowed from slot"
+            );
+            _assertSteps(id, slots, Step.Message);
+        } catch {
+            assertEq(_pack(id), beforeSelf, "CN-P2 rejected direct act mutated");
+        }
+        assertEq(_pack(ids[(uint256(idSel) + 1) % N_IDS]), beforeOther, "CN-I7 rogue sibling");
+        calls++;
+    }
+
     function assertContractNetInvariants() external view {
         for (uint256 i = 0; i < N_IDS; i++) {
             _assertLive(ids[i]);
@@ -174,11 +252,14 @@ contract ContractNetHandler is Test {
     function _assertLive(bytes32 id) internal view {
         ContractNetManager.Conversation memory c = manager.conversation(id);
         uint32 counted;
-        for (uint256 i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < 4; i++) {
             uint8 slot = manager.slotOf(id, known[i]);
             if (slot != ContractNetLib.SLOT_NONE) {
                 counted++;
                 assertTrue(slot <= ContractNetLib.SLOT_ACCEPTED, "CN-I4 bad slot");
+            }
+            if (known[i] == address(rogue)) {
+                continue;
             }
             uint8 phase = _session(known[i], id);
             if (slot == ContractNetLib.SLOT_NONE) {
@@ -218,11 +299,13 @@ contract ContractNetHandler is Test {
         if (mask & 1 != 0) n++;
         if (mask & 2 != 0) n++;
         if (mask & 4 != 0) n++;
+        if (mask & 8 != 0) n++;
         parts = new address[](n);
         uint256 k;
         if (mask & 1 != 0) parts[k++] = address(p1);
         if (mask & 2 != 0) parts[k++] = address(p2);
         if (mask & 4 != 0) parts[k++] = address(autoInform);
+        if (mask & 8 != 0) parts[k++] = address(rogue);
     }
 
     function _part(uint8 sel) internal view returns (ExposedContractNetParticipant) {
@@ -256,11 +339,11 @@ contract ContractNetHandler is Test {
         view
         returns (address[] memory acc, address[] memory rej, address[] memory sil)
     {
-        address[] memory proposed = new address[](3);
-        address[] memory invited = new address[](3);
+        address[] memory proposed = new address[](4);
+        address[] memory invited = new address[](4);
         uint256 np;
         uint256 ni;
-        for (uint256 i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < 4; i++) {
             uint8 slot = manager.slotOf(id, known[i]);
             if (slot == ContractNetLib.SLOT_PROPOSED) {
                 proposed[np++] = known[i];
@@ -298,11 +381,43 @@ contract ContractNetHandler is Test {
                 manager.slotOf(id, address(p1)),
                 manager.slotOf(id, address(p2)),
                 manager.slotOf(id, address(autoInform)),
+                manager.slotOf(id, address(rogue)),
                 p1.session(id).phase,
                 p2.session(id).phase,
                 autoInform.session(id).phase
             )
         );
+    }
+
+    enum Step {
+        Cfp,
+        Message,
+        Evaluate
+    }
+
+    function _slots(bytes32 id) internal view returns (uint8[4] memory s) {
+        for (uint256 i = 0; i < 4; i++) {
+            s[i] = manager.slotOf(id, known[i]);
+        }
+    }
+
+    /// @dev CN-P5: manager slots only move forward along the FSM, or are cleared.
+    function _assertSteps(bytes32 id, uint8[4] memory before, Step via) internal view {
+        for (uint256 i = 0; i < 4; i++) {
+            uint8 a = before[i];
+            uint8 b = manager.slotOf(id, known[i]);
+            bool ok;
+            if (a == b || b == ContractNetLib.SLOT_NONE) {
+                ok = true;
+            } else if (a == ContractNetLib.SLOT_NONE) {
+                ok = via == Step.Cfp && b == ContractNetLib.SLOT_INVITED;
+            } else if (a == ContractNetLib.SLOT_INVITED) {
+                ok = via == Step.Message && b == ContractNetLib.SLOT_PROPOSED;
+            } else if (a == ContractNetLib.SLOT_PROPOSED) {
+                ok = via == Step.Evaluate && b == ContractNetLib.SLOT_ACCEPTED;
+            }
+            assertTrue(ok, "CN-P5 invalid slot transition");
+        }
     }
 
     function _assertNoNeedle(address target) internal view {
