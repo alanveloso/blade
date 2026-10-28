@@ -22,6 +22,10 @@ enum RequestRole {
 
 /// @title On-chain implementation of the supported FIPA Request interaction subset.
 /// @dev Cancel is outside the current Core scope. Abstract: the leaf calls `Agent` once.
+/// @dev Correlation: every act after the opening Request is bound to the session token
+/// (`replyWith` of that Request). Participant acts must carry it in `inReplyTo`; initiator
+/// continuations must keep it in `replyWith`. The initiator's Core assigns the token from a
+/// monotonic nonce, so a reused `conversationId` never reuses a token.
 abstract contract RequestAgent is Agent {
     /// @dev Live session only. Terminal acts `delete` this entry; `Terminal` is not stored.
     struct Status {
@@ -29,13 +33,18 @@ abstract contract RequestAgent is Agent {
         RequestRole role;
         address transportPeer;
         bytes32 logicalPeer;
+        bytes32 replyWith;
     }
 
     mapping(bytes32 conversationId => Status) internal _request;
+    /// @dev Persistent (one slot per agent). Never decremented; makes Request tokens single-use.
+    uint256 internal _requestNonce;
 
     error InvalidTransition();
     error UnexpectedPeer();
     error NotRequestPerformative();
+    error MissingReplyWith();
+    error ReplyWithAssignedByCore();
 
     event RequestAdvanced(bytes32 indexed conversationId, uint8 phase, uint8 performative);
 
@@ -54,10 +63,18 @@ abstract contract RequestAgent is Agent {
         if (s.phase != RequestPhase.None) {
             revert InvalidTransition();
         }
+        if (outbound.replyWith != bytes32(0)) {
+            revert ReplyWithAssignedByCore();
+        }
+        bytes32 token = keccak256(
+            abi.encode(block.chainid, address(this), outbound.conversationId, ++_requestNonce)
+        );
         s.phase = RequestPhase.Requested;
         s.role = RequestRole.Initiator;
         s.transportPeer = to;
         s.logicalPeer = bytes32(0);
+        s.replyWith = token;
+        outbound.replyWith = token;
         emit RequestAdvanced(
             outbound.conversationId, uint8(RequestPhase.Requested), outbound.performative
         );
@@ -74,21 +91,25 @@ abstract contract RequestAgent is Agent {
             if (message.performative != uint8(Performative.Request)) {
                 revert InvalidTransition();
             }
+            if (message.replyWith == bytes32(0)) {
+                revert MissingReplyWith();
+            }
             s.phase = RequestPhase.Requested;
             s.role = RequestRole.Participant;
             s.transportPeer = msg.sender;
             s.logicalPeer = message.logicalSender;
+            s.replyWith = message.replyWith;
             emit RequestAdvanced(
                 message.conversationId, uint8(RequestPhase.Requested), message.performative
             );
             return true;
         }
         _assertPeer(s, message);
-        _commit(
-            message.conversationId,
-            _nextInbound(s.role, s.phase, Performative(message.performative)),
-            message.performative
+        RequestPhase next = _nextInbound(s.role, s.phase, Performative(message.performative));
+        _assertCorrelated(
+            s, s.role == RequestRole.Participant, message.replyWith, message.inReplyTo
         );
+        _commit(message.conversationId, next, message.performative);
         return true;
     }
 
@@ -113,11 +134,12 @@ abstract contract RequestAgent is Agent {
         } else if (to != trustedRelay) {
             revert UnexpectedPeer();
         }
-        _commit(
-            outbound.conversationId,
-            _nextOutbound(s.role, s.phase, Performative(outbound.performative)),
-            outbound.performative
+        RequestPhase next = _nextOutbound(s.role, s.phase, Performative(outbound.performative));
+        // Checked against the stored session, not against the application-supplied `inbound`.
+        _assertCorrelated(
+            s, s.role == RequestRole.Initiator, outbound.replyWith, outbound.inReplyTo
         );
+        _commit(outbound.conversationId, next, outbound.performative);
         return true;
     }
 
@@ -156,6 +178,17 @@ abstract contract RequestAgent is Agent {
         }
         if (msg.sender != trustedRelay || message.logicalSender != s.logicalPeer) {
             revert UnexpectedPeer();
+        }
+    }
+
+    function _assertCorrelated(
+        Status storage s,
+        bool fromInitiator,
+        bytes32 replyWith,
+        bytes32 inReplyTo
+    ) internal view {
+        if ((fromInitiator ? replyWith : inReplyTo) != s.replyWith) {
+            revert ReplyWithMismatch();
         }
     }
 
