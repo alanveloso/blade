@@ -2,6 +2,7 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {ContractNetLib} from "../src/core/ContractNetLib.sol";
+import {IAgent} from "../src/core/IAgent.sol";
 import {Message} from "../src/core/Message.sol";
 import {Performative} from "../src/core/Performative.sol";
 import {Protocol} from "../src/core/Protocol.sol";
@@ -10,6 +11,7 @@ import {
     BareContractNetManager,
     BareContractNetParticipant,
     DecisionRecordingParticipant,
+    DirectReentrantParticipant,
     ExposedContractNetManager,
     ExposedContractNetParticipant,
     MaliciousReentrantParticipant,
@@ -606,6 +608,8 @@ contract ContractNetRobustnessTest is Test {
 
     // --- Reentrancy / rollback ---
 
+    /// @dev Participant-side guard only: the act is rejected by the reentrant participant's own
+    /// FSM and never reaches the manager. Manager-side reentry is covered by `test_reentry_*`.
     function test_maliciousReentrantProposeOnAcceptRevertsEvaluate() public {
         bytes32 id = keccak256("mal");
         uint64 by = _deadline();
@@ -617,6 +621,281 @@ contract ContractNetRobustnessTest is Test {
         manager.evaluate(id, _one(address(malicious)), _empty(), _empty());
         assertEq(manager.slotOf(id, address(malicious)), ContractNetLib.SLOT_PROPOSED);
         assertFalse(manager.conversation(id).evaluated);
+    }
+
+    // --- Direct manager reentry (JAAMAS review): the adversary bypasses its own FSM ---
+
+    function _cnAct(bytes32 id, Performative act) internal view returns (Message memory m) {
+        m.performative = uint8(act);
+        m.protocol = uint8(Protocol.FipaContractNet);
+        m.conversationId = id;
+        if (act == Performative.Cfp) {
+            m.replyBy = _deadline();
+        }
+    }
+
+    function _handleCall(Message memory m) internal pure returns (bytes memory) {
+        return abi.encodeCall(IAgent.handle, (m));
+    }
+
+    function _openProposed(DirectReentrantParticipant adv, bytes32 id)
+        internal
+        returns (uint64 by)
+    {
+        by = _deadline();
+        Message memory cfp = _cfp(id, by);
+        manager.cfp(_one(address(adv)), cfp);
+        adv.respond(cfp, address(manager), _out(cfp, Performative.Propose));
+    }
+
+    function test_reentry_directProposeReachesManagerAndIsRejected() public {
+        DirectReentrantParticipant adv = new DirectReentrantParticipant();
+        bytes32 id = keccak256("re-direct");
+        uint64 by = _openProposed(adv, id);
+        Message memory m = _cnAct(id, Performative.Propose);
+        adv.arm(uint8(Performative.AcceptProposal), address(manager), _handleCall(m), false);
+        vm.warp(uint256(by) + 1);
+
+        vm.expectCall(address(manager), _handleCall(m), 1);
+        manager.evaluate(id, _one(address(adv)), _empty(), _empty());
+
+        assertTrue(adv.attempted(), "reentry not attempted");
+        assertFalse(adv.reentrySucceeded());
+        // Raised by the manager's slot check (ACCEPTED is not INVITED). The adversary's own FSM
+        // would have raised InvalidTransition, and it was not consulted (its phase is untouched).
+        assertEq(
+            adv.reentryReturnData(), abi.encodeWithSelector(ContractNetLib.UnexpectedPeer.selector)
+        );
+        assertEq(adv.slotSeenDuringReentry(), ContractNetLib.SLOT_ACCEPTED);
+        assertTrue(adv.evaluatedSeenDuringReentry(), "effects not applied before interaction");
+
+        assertEq(manager.slotOf(id, address(adv)), ContractNetLib.SLOT_ACCEPTED);
+        assertEq(manager.conversation(id).live, 1);
+        assertTrue(manager.conversation(id).evaluated);
+        assertEq(adv.session(id).phase, ContractNetLib.PART_ACCEPTED);
+    }
+
+    function test_reentry_directProposeBubbledRollsBackEvaluate() public {
+        DirectReentrantParticipant adv = new DirectReentrantParticipant();
+        bytes32 id = keccak256("re-bubble");
+        uint64 by = _openProposed(adv, id);
+        adv.arm(
+            uint8(Performative.AcceptProposal),
+            address(manager),
+            _handleCall(_cnAct(id, Performative.Propose)),
+            true
+        );
+        vm.warp(uint256(by) + 1);
+        vm.expectRevert(ContractNetLib.UnexpectedPeer.selector);
+        manager.evaluate(id, _one(address(adv)), _empty(), _empty());
+        assertEq(manager.slotOf(id, address(adv)), ContractNetLib.SLOT_PROPOSED);
+        assertEq(manager.conversation(id).live, 1);
+        assertFalse(manager.conversation(id).evaluated);
+        assertEq(adv.session(id).phase, ContractNetLib.PART_PROPOSED);
+    }
+
+    function test_reentry_directInvalidActsRejectedByManager() public {
+        Performative[8] memory acts = [
+            Performative.Propose,
+            Performative.Refuse,
+            Performative.Cfp,
+            Performative.AcceptProposal,
+            Performative.RejectProposal,
+            Performative.Request,
+            Performative.Agree,
+            Performative.Cancel
+        ];
+        for (uint256 i = 0; i < acts.length; i++) {
+            DirectReentrantParticipant adv = new DirectReentrantParticipant();
+            bytes32 id = keccak256(abi.encode("re-matrix", i));
+            uint64 by = _openProposed(adv, id);
+            Message memory m = _cnAct(id, acts[i]);
+            adv.arm(uint8(Performative.AcceptProposal), address(manager), _handleCall(m), false);
+            vm.warp(uint256(by) + 1);
+            vm.expectCall(address(manager), _handleCall(m), 1);
+            manager.evaluate(id, _one(address(adv)), _empty(), _empty());
+            bytes4 expected = acts[i] == Performative.Propose
+                ? ContractNetLib.UnexpectedPeer.selector
+                : ContractNetLib.InvalidTransition.selector;
+            assertFalse(adv.reentrySucceeded());
+            assertEq(adv.reentryReturnData(), abi.encodeWithSelector(expected));
+            assertEq(manager.slotOf(id, address(adv)), ContractNetLib.SLOT_ACCEPTED);
+            assertEq(manager.conversation(id).live, 1);
+            assertTrue(manager.conversation(id).evaluated);
+        }
+    }
+
+    /// @dev Inform/Failure/NotUnderstood from an ACCEPTED slot are valid manager transitions; a
+    /// reentrant delivery is equivalent to the synchronous completion already supported (M30).
+    function test_reentry_directCompletionActsAreValidAndConsistent() public {
+        Performative[3] memory acts =
+            [Performative.Inform, Performative.Failure, Performative.NotUnderstood];
+        for (uint256 i = 0; i < acts.length; i++) {
+            DirectReentrantParticipant adv = new DirectReentrantParticipant();
+            ExposedContractNetParticipant honest = new ExposedContractNetParticipant(address(0));
+            bytes32 id = keccak256(abi.encode("re-complete", i));
+            uint64 by = _deadline();
+            Message memory cfp = _cfp(id, by);
+            manager.cfp(_two(address(adv), address(honest)), cfp);
+            adv.respond(cfp, address(manager), _out(cfp, Performative.Propose));
+            honest.respond(cfp, address(manager), _out(cfp, Performative.Propose));
+            adv.arm(
+                uint8(Performative.AcceptProposal),
+                address(manager),
+                _handleCall(_cnAct(id, acts[i])),
+                false
+            );
+            vm.warp(uint256(by) + 1);
+            manager.evaluate(id, _two(address(adv), address(honest)), _empty(), _empty());
+            assertTrue(adv.reentrySucceeded());
+            assertEq(manager.slotOf(id, address(adv)), ContractNetLib.SLOT_NONE);
+            assertEq(manager.slotOf(id, address(honest)), ContractNetLib.SLOT_ACCEPTED);
+            assertEq(manager.conversation(id).live, 1);
+            assertEq(honest.session(id).phase, ContractNetLib.PART_ACCEPTED);
+            honest.respond(cfp, address(manager), _out(cfp, Performative.Inform));
+            _assertNetGone(id);
+        }
+    }
+
+    function test_reentry_evaluateSameConversationRejected() public {
+        DirectReentrantParticipant adv = new DirectReentrantParticipant();
+        bytes32 id = keccak256("re-eval");
+        uint64 by = _openProposed(adv, id);
+        bytes memory call_ = abi.encodeCall(
+            ExposedContractNetManager.evaluate, (id, _one(address(adv)), _empty(), _empty())
+        );
+        adv.arm(uint8(Performative.AcceptProposal), address(manager), call_, false);
+        vm.warp(uint256(by) + 1);
+        manager.evaluate(id, _one(address(adv)), _empty(), _empty());
+        assertEq(
+            adv.reentryReturnData(),
+            abi.encodeWithSelector(ContractNetLib.InvalidTransition.selector)
+        );
+        assertEq(manager.slotOf(id, address(adv)), ContractNetLib.SLOT_ACCEPTED);
+        assertEq(manager.conversation(id).live, 1);
+    }
+
+    function test_reentry_cfpSameLiveConversationRejected() public {
+        DirectReentrantParticipant adv = new DirectReentrantParticipant();
+        bytes32 id = keccak256("re-cfp-live");
+        uint64 by = _openProposed(adv, id);
+        bytes memory call_ =
+            abi.encodeCall(ExposedContractNetManager.cfp, (_one(address(p2)), _cfp(id, by + 100)));
+        adv.arm(uint8(Performative.AcceptProposal), address(manager), call_, false);
+        vm.warp(uint256(by) + 1);
+        manager.evaluate(id, _one(address(adv)), _empty(), _empty());
+        assertEq(
+            adv.reentryReturnData(),
+            abi.encodeWithSelector(ContractNetLib.InvalidTransition.selector)
+        );
+        assertEq(manager.slotOf(id, address(p2)), ContractNetLib.SLOT_NONE);
+        assertEq(p2.session(id).phase, ContractNetLib.PART_NONE);
+    }
+
+    /// @dev All-reject evaluation clears the conversation before delivering decisions; a rejected
+    /// adversary reopening the same id from inside the callback yields a fresh, consistent
+    /// conversation (the wrapper's `cfp` is permissive by application choice).
+    function test_reentry_cfpSameIdAfterSynchronousClearIsConsistent() public {
+        DirectReentrantParticipant adv = new DirectReentrantParticipant();
+        bytes32 id = keccak256("re-cfp-clear");
+        uint64 by = _openProposed(adv, id);
+        uint64 by2 = by + 1000;
+        bytes memory call_ =
+            abi.encodeCall(ExposedContractNetManager.cfp, (_one(address(p2)), _cfp(id, by2)));
+        adv.arm(uint8(Performative.RejectProposal), address(manager), call_, false);
+        vm.warp(uint256(by) + 1);
+        manager.evaluate(id, _empty(), _one(address(adv)), _empty());
+        assertTrue(adv.reentrySucceeded());
+        assertEq(manager.slotOf(id, address(adv)), ContractNetLib.SLOT_NONE);
+        assertEq(manager.slotOf(id, address(p2)), ContractNetLib.SLOT_INVITED);
+        assertEq(manager.conversation(id).live, 1);
+        assertEq(manager.conversation(id).invited, 1);
+        assertFalse(manager.conversation(id).evaluated);
+        assertEq(manager.conversation(id).replyBy, by2);
+        assertEq(adv.session(id).phase, ContractNetLib.PART_NONE);
+    }
+
+    function test_reentry_otherConversations() public {
+        DirectReentrantParticipant adv = new DirectReentrantParticipant();
+        bytes32 a = keccak256("re-other-a");
+        bytes32 b = keccak256("re-other-b");
+        bytes32 c = keccak256("re-other-c");
+        uint64 by = _openProposed(adv, a);
+        manager.cfp(_one(address(adv)), _cfp(b, by + 1000));
+        manager.cfp(_one(address(p1)), _cfp(c, by + 1000));
+        bytes32 cBefore = keccak256(
+            abi.encode(manager.conversation(c), manager.slotOf(c, address(p1)), p1.session(c))
+        );
+
+        // Not a member of `c`: rejected by the manager, `c` untouched.
+        adv.arm(
+            uint8(Performative.AcceptProposal),
+            address(manager),
+            _handleCall(_cnAct(c, Performative.Propose)),
+            false
+        );
+        vm.warp(uint256(by) + 1);
+        manager.evaluate(a, _one(address(adv)), _empty(), _empty());
+        assertEq(
+            adv.reentryReturnData(), abi.encodeWithSelector(ContractNetLib.UnexpectedPeer.selector)
+        );
+        assertEq(
+            keccak256(
+                abi.encode(manager.conversation(c), manager.slotOf(c, address(p1)), p1.session(c))
+            ),
+            cBefore
+        );
+        assertEq(manager.slotOf(a, address(adv)), ContractNetLib.SLOT_ACCEPTED);
+        assertEq(manager.slotOf(b, address(adv)), ContractNetLib.SLOT_INVITED);
+
+        // Member of `b` (window still open): a reentrant Propose is a legitimate act on `b` and
+        // must not disturb `a`.
+        DirectReentrantParticipant adv2 = new DirectReentrantParticipant();
+        bytes32 a2 = keccak256("re-other-a2");
+        bytes32 b2 = keccak256("re-other-b2");
+        uint64 byA2 = _openProposed(adv2, a2);
+        manager.cfp(_one(address(adv2)), _cfp(b2, byA2 + 1000));
+        adv2.arm(
+            uint8(Performative.AcceptProposal),
+            address(manager),
+            _handleCall(_cnAct(b2, Performative.Propose)),
+            false
+        );
+        vm.warp(uint256(byA2) + 1);
+        manager.evaluate(a2, _one(address(adv2)), _empty(), _empty());
+        assertTrue(adv2.reentrySucceeded());
+        assertEq(manager.slotOf(b2, address(adv2)), ContractNetLib.SLOT_PROPOSED);
+        assertEq(manager.slotOf(a2, address(adv2)), ContractNetLib.SLOT_ACCEPTED);
+        assertEq(manager.conversation(a2).live, 1);
+        assertTrue(manager.conversation(a2).evaluated);
+        assertFalse(manager.conversation(b2).evaluated);
+    }
+
+    function testFuzz_reentry_anyActKeepsManagerConsistent(uint8 act) public {
+        DirectReentrantParticipant adv = new DirectReentrantParticipant();
+        bytes32 id = keccak256("re-fuzz");
+        uint64 by = _deadline();
+        Message memory cfp = _cfp(id, by);
+        manager.cfp(_two(address(adv), address(p1)), cfp);
+        adv.respond(cfp, address(manager), _out(cfp, Performative.Propose));
+        p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
+        Message memory m;
+        m.performative = act;
+        m.protocol = uint8(Protocol.FipaContractNet);
+        m.conversationId = id;
+        adv.arm(uint8(Performative.AcceptProposal), address(manager), _handleCall(m), false);
+        vm.warp(uint256(by) + 1);
+        manager.evaluate(id, _two(address(adv), address(p1)), _empty(), _empty());
+
+        uint8 slot = manager.slotOf(id, address(adv));
+        bool completion = act == uint8(Performative.Inform) || act == uint8(Performative.Failure)
+            || act == uint8(Performative.NotUnderstood);
+        assertEq(adv.reentrySucceeded(), completion);
+        assertEq(slot, completion ? ContractNetLib.SLOT_NONE : ContractNetLib.SLOT_ACCEPTED);
+        assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_ACCEPTED);
+        uint32 counted = (slot == ContractNetLib.SLOT_NONE ? 0 : 1) + 1;
+        assertEq(manager.conversation(id).live, counted);
+        assertTrue(manager.conversation(id).evaluated);
     }
 
     function test_acceptHandleRevertRollsBackEvaluate() public {
