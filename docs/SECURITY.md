@@ -3,7 +3,7 @@
 This document records what the Core enforces on-chain, what it assumes, and what it does not
 protect. Every statement below is backed by a test; the test names are given in brackets.
 
-## 1. Request: message correlation (changed in the JAAMAS revision)
+## 1. Request: message correlation (changed in the protocol revision)
 
 ### Problem (reviewer 3)
 

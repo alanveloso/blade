@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
-import {NetFixture} from "../jaamas/Fixtures.sol";
+import {NetFixture} from "../protocol/Fixtures.sol";
 import {
     AuditNativeManager,
     AuditUniqueManager,

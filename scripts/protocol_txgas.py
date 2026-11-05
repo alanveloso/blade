@@ -3,7 +3,7 @@
 import io,json,os,subprocess,tarfile,tempfile,time,urllib.request,hashlib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'evidence/jaamas'
+OUT=ROOT/'evidence/protocol'
 RPC='http://127.0.0.1:18547'
 BASE='6642b2f41ab0c89e8114e464fa4790a69985d4ad'
 ZERO='0x'+'00'*20
@@ -40,16 +40,12 @@ def campaign(base,label,kind):
             time.sleep(.05)
         else:raise RuntimeError('Receipt timeout: '+txhash)
         assert int(receipt['status'],16)==1,(name,receipt)
-        intrinsic = 21000 + sum(4 if b==0 else 16 for b in bytes.fromhex(data[2:])) if to else None
-        receipts.append({'name':name,'gasUsed':int(receipt['gasUsed'],16),'intrinsicGas':intrinsic,
-                         'netExecutionAfterRefund':int(receipt['gasUsed'],16)-intrinsic if intrinsic is not None else None,
-                         'calldata':data,'receipt':receipt})
+        receipts.append({'name':name,'gasUsed':int(receipt['gasUsed'],16),'calldata':data,'receipt':receipt})
         return receipt
     def deploy(name,constructor=False):
         source = {'ExampleRequester':'RequestExample.sol','ExampleParticipant':'RequestExample.sol',
                   'SubscriptionActor':'Subscribe.t.sol','ExposedContractNetParticipant':'ContractNetActors.sol',
-                  'OwnerGatedContractNetManager':'ContractNetActors.sol','QueuedContractNetManager':'QueuedContractNetManager.sol',
-                  **{n:'ContractNetAlternatives.sol' for n in ['AuditNativeManager','AuditUniqueManager','AuditGeneratedIdManager','AuditTokenManager','AuditTokenParticipant']}}[name]
+                  'OwnerGatedContractNetManager':'ContractNetActors.sol','QueuedContractNetManager':'QueuedContractNetManager.sol'}[name]
         paths=[Path(base)/'out'/source/(name+'.json')];assert paths[0].is_file(),paths
         data=json.loads(paths[0].read_text()); bytecode=data['bytecode']['object']
         code=bytecode+('00'*32 if constructor else '')
@@ -59,27 +55,7 @@ def campaign(base,label,kind):
         deployed[name]=addr
         return addr
     def invoke(addr,name,sig,*args):return send(addr,cast('calldata',sig,*args),name)
-    if kind in ['audit-native','audit-unique','audit-generated','audit-token']:
-        managerName={'audit-native':'AuditNativeManager','audit-unique':'AuditUniqueManager',
-            'audit-generated':'AuditGeneratedIdManager','audit-token':'AuditTokenManager'}[kind]
-        q=deploy(managerName)
-        p=deploy('AuditTokenParticipant' if kind=='audit-token' else 'ExposedContractNetParticipant',kind!='audit-token')
-        for iteration in [1,2]:
-            id=cast('keccak',f'audit-instance-{iteration}');token=BZERO;deadline=1700001000+iteration*1000
-            def message(act,by=0):return f'({act},2,{id},{BZERO},{token},{by},{BZERO},0x)'
-            opening=f'(7,2,{BZERO if kind=="audit-generated" else id},{BZERO},{BZERO},{deadline},{BZERO},0x)'
-            receipt=invoke(q,f'{iteration} open',f'{"open" if kind=="audit-generated" else "cfp"}(address[],{TUP})',f'[{p}]',opening)
-            if kind=='audit-generated':
-                event=cast('keccak','GeneratedConversation(bytes32)')
-                id=next(log['topics'][1] for log in receipt['logs'] if log['topics'][0]==event)
-            if kind=='audit-token':token=rpc('eth_call',[{'to':q,'data':cast('calldata','token(bytes32)',id)},'latest'])
-            opening=f'(7,2,{id},{token},{BZERO},{deadline},{BZERO},0x)'
-            invoke(p,f'{iteration} propose',f'respond({TUP},address,{TUP})',opening,q,message(8))
-            stamp=deadline+1
-            invoke(q,f'{iteration} evaluate','evaluate(bytes32,address[],address[],address[])',id,f'[{p}]','[]','[]')
-            invoke(p,f'{iteration} inform',f'respond({TUP},address,{TUP})',opening,q,message(4))
-            assert int(rpc('eth_call',[{'to':q,'data':cast('calldata','slotOf(bytes32,address)',id,p)},'latest']),16)==0
-    elif kind=='request':
+    if kind=='request':
         a=deploy('ExampleRequester',True);b=deploy('ExampleParticipant',True)
         invoke(a,'request inform cold','request(address,bytes32,bytes)',b,ID,'0x01')
         invoke(a,'request inform next transaction','request(address,bytes32,bytes)',b,ID,'0x01')
@@ -129,7 +105,7 @@ with tempfile.TemporaryDirectory(prefix='blade-txgas-') as d:
                 except OSError:time.sleep(.05)
             else:raise RuntimeError('Anvil startup timeout')
             snapshot=rpc('evm_snapshot')
-            for label,path,kinds in [('prior',prior,['request','sync','queue','subscribe']),('final',ROOT,['request','sync','queue','subscribe','audit-native','audit-unique','audit-generated','audit-token'])]:
+            for label,path,kinds in [('baseline',base,['request','sync']),('prior',prior,['request','sync','queue','subscribe']),('final',ROOT,['request','sync','queue','subscribe'])]:
                 for kind in kinds:
                     assert rpc('evm_revert',[snapshot]);snapshot=rpc('evm_snapshot')
                     campaign(path,f'{label}-{kind}',kind)

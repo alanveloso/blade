@@ -2,7 +2,7 @@
 """Verify closing evidence without modifying any earlier source or result."""
 import hashlib,json,platform,re,subprocess
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'evidence/jaamas'
+ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'evidence/protocol'
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def read(n):return json.loads((OUT/n).read_text())
 def delta(a,b):return {'before':a,'after':b,'delta':b-a,'percent':100*(b-a)/a}
@@ -39,7 +39,7 @@ for d in ['src','test','experiments','examples','scripts','formal','docs']:
 source.append(ROOT/'foundry.toml')
 head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
 branch=subprocess.check_output(['git','branch','--show-current'],cwd=ROOT,text=True).strip()
-assert head=='6642b2f41ab0c89e8114e464fa4790a69985d4ad' and branch=='revision/jaamas-protocol-evidence'
+assert head=='6642b2f41ab0c89e8114e464fa4790a69985d4ad' and branch=='revision/protocol-evidence'
 manifest={'head':head,'branch':branch,'platform':platform.platform(),'preserved_files':len(old),'full_test_counts_pass_fail_skip':counts,
  'symbolic':[{k:r[k] for k in ['name','exitcode','num_paths','num_bounded_loops']} for r in checks],
  'repeated_receipt_scenarios':12,'original_functional_sources_unchanged':True,

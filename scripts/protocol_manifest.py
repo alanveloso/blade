@@ -3,12 +3,12 @@
 import ast,hashlib,json,platform,re,shutil,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'evidence/jaamas'
+OUT=ROOT/'evidence/protocol'
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def compare(a,b):return {'before':a,'after':b,'delta':b-a,'percent':100*(b-a)/a if a else None}
 def read(name):return json.loads((OUT/name).read_text())
 old=read('prior-hashes.json')
-preserved=[p for p in old if p.startswith('evidence/jaamas/')]
+preserved=[p for p in old if p.startswith('evidence/protocol/')]
 assert all((ROOT/p).is_file() and sha(ROOT/p)==old[p] for p in preserved)
 first=read('txgas-first.json');repeat=read('txgas.json')
 assert set(first)==set(repeat)
@@ -57,6 +57,6 @@ manifest={'date':'2026-11-05','head':subprocess.check_output(['git','rev-parse',
  'artifact_sha256':{str(p.relative_to(ROOT)):sha(p) for p in sorted((ROOT/'out').glob('*/*.json'))},
  'evidence_sha256':{str(p.relative_to(ROOT)):sha(p) for p in sorted(OUT.rglob('*')) if p.is_file() and p.name!='manifest-final.json'}}
 assert manifest['head']=='6642b2f41ab0c89e8114e464fa4790a69985d4ad'
-assert manifest['branch']=='revision/jaamas-protocol-evidence'
+assert manifest['branch']=='revision/protocol-evidence'
 (OUT/'manifest-final.json').write_text(json.dumps(manifest,indent=2)+'\n')
 print('PASS: 2 x 488 tests; 11 symbolic obligations; expected-failing control; 10 identical receipt scenarios;',len(preserved),'previous evidence files unchanged.')

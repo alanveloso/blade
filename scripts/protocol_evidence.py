@@ -12,7 +12,7 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = Path(os.environ.get('BLADE_EVIDENCE_DIR', str(ROOT / 'evidence/jaamas')))
+OUT = Path(os.environ.get('BLADE_EVIDENCE_DIR', str(ROOT / 'evidence/protocol')))
 BASE = '6642b2f41ab0c89e8114e464fa4790a69985d4ad'
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -28,7 +28,7 @@ metadata = {'baseline_commit': BASE, 'head': run(['git', 'rev-parse', 'HEAD'], '
             'forge': run(['forge', '--version'], 'forge-version.txt'),
             'seed': '0x42', 'evm_version': 'cancun'}
 run(['forge', 'config', '--json'], 'foundry-config.json')
-with tempfile.TemporaryDirectory(prefix='blade-jaamas-baseline-') as d:
+with tempfile.TemporaryDirectory(prefix='blade-protocol-baseline-') as d:
     archive = subprocess.check_output(['git', 'archive', BASE], cwd=ROOT)
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(d, filter='data')
@@ -50,7 +50,7 @@ run(['forge', 'test', '--offline', '--evm-version', 'cancun', '--fuzz-seed', '0x
 run(['forge', 'test', '--offline', '--evm-version', 'cancun', '--match-test', 'test_gas', '-vv'], 'final-gas.txt')
 metadata['final_bytecode_sha256'] = hashes(ROOT)
 metadata['source_sha256'] = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-    for directory in ['src', 'examples', 'experiments', 'formal', 'test/jaamas', 'test/symbolic', 'scripts']
+    for directory in ['src', 'examples', 'experiments', 'formal', 'test/protocol', 'test/symbolic', 'scripts']
     for p in sorted((ROOT / directory).rglob('*')) if p.is_file()}
 (OUT / 'manifest.json').write_text(json.dumps(metadata, indent=2)+'\n')
 solc = os.environ.get('SOLC')
@@ -65,5 +65,5 @@ if solc and z3:
              'formal/RequestProperties.sol'], f'formal-{engine}-z3.txt', env=env)
     # solc exit code alone does NOT indicate successful proofs. Inspect solver diagnostics.
 else:
-    print('Formal checks not run: set SOLC and Z3_LIB_DIR (see docs/JAAMAS_REVISION.md).')
+    print('Formal checks not run: set SOLC and Z3_LIB_DIR (see docs/PROTOCOL_REVISION.md).')
 print('Evidence written to', OUT)

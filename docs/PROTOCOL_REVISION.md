@@ -1,8 +1,7 @@
-# JAAMAS revision — protocol layer
+# Protocol revision
 
-This document is the single entry point for the JAAMAS protocol revision of BLADE.
-It covers scope, what changed in Core, how to reproduce tests, and known limits.
-Detailed reviewer-response drafts live in the evaluation artifact when needed for the manuscript.
+Single entry point for the protocol-layer revision of BLADE: scope, Core changes,
+how to reproduce tests, and known limits.
 
 ## Scope
 
@@ -31,11 +30,11 @@ Application examples: `examples/SolidityPolicyExample.sol`. Experimental alterna
 
 ```sh
 forge test --fuzz-seed 0x42
-forge test --match-path 'test/jaamas/*' --fuzz-seed 0x42 -vv
+forge test --match-path 'test/protocol/*' --fuzz-seed 0x42 -vv
 forge test --match-path 'test/audit/*' --fuzz-seed 0x42 -vv
 ```
 
-Optional reproduction helpers: `scripts/jaamas_*.py` (offline; no paid APIs).
+Optional reproduction helpers: `scripts/protocol_*.py` (offline; no paid APIs).
 
 ## Known limitations (must not be omitted)
 
@@ -49,5 +48,4 @@ Optional reproduction helpers: `scripts/jaamas_*.py` (offline; no paid APIs).
 ## Evidence location
 
 Run logs, manifests, symbolic dumps and comparative tables for this revision are kept in
-the **blade-evaluation** repository under `revision/evidence/jaamas/`, not as multiple
-parallel packs inside this Core tree.
+the **blade-evaluation** repository under `revision/evidence/protocol/`.

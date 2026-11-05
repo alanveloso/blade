@@ -623,7 +623,7 @@ contract ContractNetRobustnessTest is Test {
         assertFalse(manager.conversation(id).evaluated);
     }
 
-    // --- Direct manager reentry (JAAMAS review): the adversary bypasses its own FSM ---
+    // --- Direct manager reentry (protocol review): the adversary bypasses its own FSM ---
 
     function _cnAct(bytes32 id, Performative act) internal view returns (Message memory m) {
         m.performative = uint8(act);

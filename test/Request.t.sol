@@ -257,7 +257,7 @@ contract RequestTest is Test {
         );
     }
 
-    /// @dev Revised for the JAAMAS review: reuse of a `conversationId` after cleanup is still
+    /// @dev Revised for the protocol review: reuse of a `conversationId` after cleanup is still
     /// allowed, but the new instance gets a fresh Core-assigned token and the previous instance's
     /// replies no longer correlate with it.
     function test_reuseConversationIdAfterCleanup() public {
@@ -403,7 +403,7 @@ contract RequestTest is Test {
         _assertCleared(bob, req.conversationId);
     }
 
-    // --- Correlation (JAAMAS review, reviewer 3) ---
+    // --- Correlation (protocol review, reviewer 3) ---
 
     function test_corr_tokenAssignedByCoreAndDeliveredToPeer() public {
         Message memory req = _request();
