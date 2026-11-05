@@ -9,3 +9,6 @@ out
 cache
 broadcast
 local-evidence/
+
+# Regenerated locally; published pack lives in blade-evaluation/revision/evidence/protocol/
+evidence/

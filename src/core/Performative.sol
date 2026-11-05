@@ -13,5 +13,6 @@ enum Performative {
     Cfp, // cfp
     Propose, // propose
     AcceptProposal, // accept-proposal
-    RejectProposal // reject-proposal
+    RejectProposal, // reject-proposal
+    Subscribe // subscribe
 }

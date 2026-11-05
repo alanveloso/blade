@@ -12,6 +12,7 @@ It implements **selected FIPA interaction semantics**. It does not claim complet
 | `Agent` / `IAgent` | Inbound `handle`; outbound `_send` / `_reply` |
 | `RequestAgent` | Request protocol (`_startRequest`) |
 | `ContractNetManager` / `ContractNetParticipant` | Contract Net (`_cfp`, `_evaluate`, `_respond`) |
+| `SubscribeAgent` | Experimental Subscribe subset |
 
 Application contracts inherit these types and expose their own external methods around the internal primitives. Protocol selection is an application concern.
 
@@ -24,8 +25,9 @@ Request and Contract Net maintain independent protocol-state namespaces, so prot
 Being Contract Net **manager and participant of the same Contract Net conversation** is unsupported and is not dual-routed: opening a manager CFP while a participant session exists for that id reverts; inbound CN on a live manager conversation is handled only as manager (a colliding participant CFP reverts). Internal revert selectors on invalid composed paths are not claimed equivalent to every standalone role.
 
 Request correlation: `_startRequest` assigns a single-use `replyWith` token (leave it zero); every later act must carry it (`inReplyTo` from the participant, `replyWith` from the initiator). Trust assumptions, limitations and gas impact are in [`docs/SECURITY.md`](docs/SECURITY.md).
+Protocol revision notes (Subscribe, CN limits, evidence pointer): [`docs/PROTOCOL_REVISION.md`](docs/PROTOCOL_REVISION.md).
 
-Minimal patterns: `examples/RequestExample.sol`, `examples/ContractNetExample.sol`, `examples/CompositeExample.sol`.
+Minimal patterns: `examples/RequestExample.sol`, `examples/ContractNetExample.sol`, `examples/CompositeExample.sol`, `examples/SolidityPolicyExample.sol`.
 
 ## Behavior Runtime
 

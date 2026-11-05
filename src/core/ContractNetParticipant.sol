@@ -34,6 +34,8 @@ abstract contract ContractNetParticipant is Agent {
         if (message.protocol != uint8(Protocol.FipaContractNet)) {
             return false;
         }
+        // Contract Net currently supports native identities only, including opening CFPs.
+        if (message.logicalSender != bytes32(0)) revert ContractNetLib.UnexpectedPeer();
         Session storage s = _cn[message.conversationId];
         Performative act = Performative(message.performative);
         if (s.phase == ContractNetLib.PART_NONE) {
