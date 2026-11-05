@@ -1,0 +1,258 @@
+Warning: Assertion checker does not yet implement type error
+  --> src/core/Message.sol:27:20:
+   |
+27 |             revert ProtocolRequiresConversationId();
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/Agent.sol:83:24:
+   |
+83 |                 revert RelayMustSetLogicalSender();
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/Agent.sol:88:20:
+   |
+88 |             revert UnauthorizedLogicalSender();
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/Agent.sol:60:20:
+   |
+60 |             revert UnauthorizedLogicalSender();
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/Agent.sol:72:20:
+   |
+72 |             revert ConversationMismatch();
+   |                    ^^^^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/Agent.sol:75:20:
+   |
+75 |             revert ReplyWithMismatch();
+   |                    ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/RequestAgent.sol:92:24:
+   |
+92 |                 revert InvalidTransition();
+   |                        ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/RequestAgent.sol:95:24:
+   |
+95 |                 revert MissingReplyWith();
+   |                        ^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:175:24:
+    |
+175 |                 revert UnexpectedPeer();
+    |                        ^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:180:20:
+    |
+180 |             revert UnexpectedPeer();
+    |                    ^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:204:20:
+    |
+204 |             revert InvalidTransition();
+    |                    ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:224:24:
+    |
+224 |                 revert InvalidTransition();
+    |                        ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:227:16:
+    |
+227 |         revert InvalidTransition();
+    |                ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:191:20:
+    |
+191 |             revert ReplyWithMismatch();
+    |                    ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/RequestAgent.sol:57:20:
+   |
+57 |             revert InvalidTransition();
+   |                    ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/RequestAgent.sol:60:20:
+   |
+60 |             revert NotRequestPerformative();
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/RequestAgent.sol:64:20:
+   |
+64 |             revert InvalidTransition();
+   |                    ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+  --> src/core/RequestAgent.sol:67:20:
+   |
+67 |             revert ReplyWithAssignedByCore();
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:126:20:
+    |
+126 |             revert InvalidTransition();
+    |                    ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:132:24:
+    |
+132 |                 revert UnexpectedPeer();
+    |                        ^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:135:20:
+    |
+135 |             revert UnexpectedPeer();
+    |                    ^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:239:20:
+    |
+239 |             revert InvalidTransition();
+    |                    ^^^^^^^^^^^^^^^^^^^
+
+Warning: Assertion checker does not yet implement type error
+   --> src/core/RequestAgent.sol:258:16:
+    |
+258 |         revert InvalidTransition();
+    |                ^^^^^^^^^^^^^^^^^^^
+
+Warning: BMC: Assertion violation happens here.
+  --> formal/RequestProperties.sol:15:9:
+   |
+15 |         assert(act == Performative.NotUnderstood);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Counterexample:
+   = 0
+  _requestNonce = 0
+  act = 6
+  next = 0
+  phase = 0
+  role = 2
+  trustedRelay = 0
+
+Note: Callstack:
+Note:
+
+Warning: BMC: Assertion violation happens here.
+  --> formal/RequestProperties.sol:16:9:
+   |
+16 |         assert(next == RequestPhase.Terminal);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Counterexample:
+   = 0
+  _requestNonce = 0
+  act = 6
+  next = 0
+  phase = 3
+  role = 2
+  trustedRelay = 0
+
+Note: Callstack:
+Note:
+
+Warning: BMC: Assertion violation happens here.
+  --> formal/RequestProperties.sol:24:9:
+   |
+24 |         assert(next == RequestPhase.Agreed || next == RequestPhase.Terminal);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Counterexample:
+   = 0
+  _requestNonce = 0
+  act = 0
+  next = 0
+  phase = 0
+  role = 1
+  trustedRelay = 0
+
+Note: Callstack:
+Note:
+
+Warning: BMC: Assertion violation happens here.
+  --> formal/RequestProperties.sol:29:9:
+   |
+29 |         assert(m.logicalSender == bytes32(0) || msg.sender == trustedRelay);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Counterexample:
+  _requestNonce = 0
+  trustedRelay = 868
+
+Note: Callstack:
+Note:
+
+Warning: BMC: Assertion violation happens here.
+  --> formal/RequestProperties.sol:30:9:
+   |
+30 |         assert(
+   |         ^ (Relevant source part starts here and spans across multiple lines).
+Note: Counterexample:
+  _requestNonce = 0
+  trustedRelay = 29534
+
+Note: Callstack:
+Note:
+
+Warning: BMC: Assertion violation happens here.
+  --> formal/RequestProperties.sol:41:9:
+   |
+41 |         assert((initiator ? rw : irt) == token);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Counterexample:
+  _requestNonce = 0
+  fromInitiator = false
+  id = 29404
+  inReplyTo = 0
+  initiator = false
+  irt = 0
+  replyWith = 0
+  rw = 0
+  token = 0xFFFFffffFFFFffffFFFFffffFFFFffffFFFFffffFFFFffffFFFFffffFFFFe232
+  trustedRelay = 0
+
+Note: Callstack:
+Note: 
+Note that array aliasing is not supported, therefore all mapping information is erased after a mapping local variable/parameter is assigned.
+You can re-introduce information using require().
+
+Warning: BMC: Assertion violation happens here.
+  --> formal/RequestProperties.sol:48:9:
+   |
+48 |         assert(
+   |         ^ (Relevant source part starts here and spans across multiple lines).
+Note: Counterexample:
+  _requestNonce = 0
+  id = 24337
+  logical = 8406
+  transport = 0xFFFFffffFFFFffffFFFFffffFFFFffffFFFFab6b
+  trustedRelay = 0
+
+Note: Callstack:
+Note: 
+Note that array aliasing is not supported, therefore all mapping information is erased after a mapping local variable/parameter is assigned.
+You can re-introduce information using require().
+
+Info: BMC: Assertion violation check is safe!
+  --> formal/RequestProperties.sol:22:13:
+   |
+22 |             assert(phase == RequestPhase.Requested && act == Performative.Agree);
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+

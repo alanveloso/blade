@@ -1,0 +1,292 @@
+{
+  "execution_vs_prior": {
+    "agree": {
+      "before": 17609,
+      "after": 17609,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "cn cfp two peers": {
+      "before": 150993,
+      "after": 151051,
+      "delta": 58,
+      "percent": 0.038412376732696214
+    },
+    "cn evaluate": {
+      "before": 30849,
+      "after": 30907,
+      "delta": 58,
+      "percent": 0.18801257739310837
+    },
+    "cn inform": {
+      "before": 17797,
+      "after": 17797,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "cn propose": {
+      "before": 16404,
+      "after": 16404,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "example request->inform (one tx)": {
+      "before": 120987,
+      "after": 120987,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "first startRequest": {
+      "before": 137932,
+      "after": 137932,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "inform": {
+      "before": 17742,
+      "after": 17742,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "next startRequest": {
+      "before": 106995,
+      "after": 106995,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "queue evaluate execution": {
+      "before": 81845,
+      "after": 77845,
+      "delta": -4000,
+      "percent": -4.887286944834749
+    },
+    "queue total execution": {
+      "before": 105623,
+      "after": 101681,
+      "delta": -3942,
+      "percent": -3.732141673688496
+    },
+    "queue two deliveries execution": {
+      "before": 23778,
+      "after": 23836,
+      "delta": 58,
+      "percent": 0.24392295399108418
+    },
+    "refuse": {
+      "before": 17739,
+      "after": 17739,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "refuse (2)": {
+      "before": 17747,
+      "after": 17747,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "startRequest": {
+      "before": 106995,
+      "after": 106995,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "subscribe agree": {
+      "before": 16825,
+      "after": 17810,
+      "delta": 985,
+      "percent": 5.854383358098068
+    },
+    "subscribe cancel": {
+      "before": 14875,
+      "after": 96915,
+      "delta": 82040,
+      "percent": 551.5294117647059
+    },
+    "subscribe cancel ack": {
+      "before": 15213,
+      "after": 16816,
+      "delta": 1603,
+      "percent": 10.537040688884506
+    },
+    "subscribe notify": {
+      "before": 15013,
+      "after": 15958,
+      "delta": 945,
+      "percent": 6.294544727902484
+    },
+    "subscribe open": {
+      "before": 126616,
+      "after": 135915,
+      "delta": 9299,
+      "percent": 7.344253490870032
+    },
+    "sync evaluate execution": {
+      "before": 31577,
+      "after": 31635,
+      "delta": 58,
+      "percent": 0.18367799347626437
+    },
+    "total": {
+      "before": 142346,
+      "after": 142346,
+      "delta": 0,
+      "percent": 0.0
+    }
+  },
+  "receipt_vs_prior": {
+    "request": {
+      "request inform cold": {
+        "before": 133473,
+        "after": 133473,
+        "delta": 0,
+        "percent": 0.0
+      },
+      "request inform next transaction": {
+        "before": 119793,
+        "after": 119793,
+        "delta": 0,
+        "percent": 0.0
+      }
+    },
+    "sync": {
+      "cfp": {
+        "before": 168656,
+        "after": 168714,
+        "delta": 58,
+        "percent": 0.03438952661037852
+      },
+      "propose 1": {
+        "before": 53002,
+        "after": 53002,
+        "delta": 0,
+        "percent": 0.0
+      },
+      "propose 2": {
+        "before": 53002,
+        "after": 53002,
+        "delta": 0,
+        "percent": 0.0
+      },
+      "evaluate": {
+        "before": 71877,
+        "after": 71935,
+        "delta": 58,
+        "percent": 0.08069340679215882
+      },
+      "inform": {
+        "before": 45760,
+        "after": 45760,
+        "delta": 0,
+        "percent": 0.0
+      }
+    },
+    "queue": {
+      "cfp": {
+        "before": 171174,
+        "after": 171232,
+        "delta": 58,
+        "percent": 0.033883650554406626
+      },
+      "propose 1": {
+        "before": 53002,
+        "after": 55569,
+        "delta": 2567,
+        "percent": 4.843213463642881
+      },
+      "propose 2": {
+        "before": 53002,
+        "after": 55569,
+        "delta": 2567,
+        "percent": 4.843213463642881
+      },
+      "evaluate": {
+        "before": 114429,
+        "after": 114429,
+        "delta": 0,
+        "percent": 0.0
+      },
+      "deliver reject": {
+        "before": 40333,
+        "after": 40362,
+        "delta": 29,
+        "percent": 0.07190142067289812
+      },
+      "deliver accept": {
+        "before": 40204,
+        "after": 40233,
+        "delta": 29,
+        "percent": 0.07213212615660133
+      },
+      "inform": {
+        "before": 45760,
+        "after": 47814,
+        "delta": 2054,
+        "percent": 4.488636363636363
+      }
+    },
+    "subscribe": {
+      "subscribe open": {
+        "before": 150258,
+        "after": 159557,
+        "delta": 9299,
+        "percent": 6.188688788616912
+      },
+      "subscribe agree": {
+        "before": 53774,
+        "after": 58759,
+        "delta": 4985,
+        "percent": 9.270279317142114
+      },
+      "subscribe notify": {
+        "before": 48362,
+        "after": 53307,
+        "delta": 4945,
+        "percent": 10.224970017782557
+      },
+      "subscribe cancel": {
+        "before": 53824,
+        "after": 148764,
+        "delta": 94940,
+        "percent": 176.3897146254459
+      },
+      "subscribe cancel ack": {
+        "before": 47810,
+        "after": 64532,
+        "delta": 16722,
+        "percent": 34.975946454716585
+      }
+    }
+  },
+  "receipt_totals": {
+    "request": {
+      "before": 253266,
+      "after": 253266,
+      "delta": 0,
+      "percent": 0.0
+    },
+    "sync": {
+      "before": 392297,
+      "after": 392413,
+      "delta": 116,
+      "percent": 0.029569433362987736
+    },
+    "queue": {
+      "before": 517904,
+      "after": 525208,
+      "delta": 7304,
+      "percent": 1.4102999783743706
+    },
+    "subscribe": {
+      "before": 354028,
+      "after": 484919,
+      "delta": 130891,
+      "percent": 36.97193442326596
+    }
+  },
+  "queue_vs_sync_final_receipts": {
+    "before": 392413,
+    "after": 525208,
+    "delta": 132795,
+    "percent": 33.840621997742176
+  }
+}

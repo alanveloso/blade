@@ -1,0 +1,74 @@
+{
+  "request": {
+    "before": 253266,
+    "after": 253266,
+    "delta": 0,
+    "percent": 0.0
+  },
+  "sync": {
+    "before": 392413,
+    "after": 392413,
+    "delta": 0,
+    "percent": 0.0
+  },
+  "queue": {
+    "before": 525208,
+    "after": 525208,
+    "delta": 0,
+    "percent": 0.0
+  },
+  "subscribe": {
+    "before": 484919,
+    "after": 484919,
+    "delta": 0,
+    "percent": 0.0
+  },
+  "native-cycle-1": {
+    "before": 264186,
+    "after": 264186,
+    "delta": 0,
+    "percent": 0.0
+  },
+  "unique-cycle-1": {
+    "before": 264186,
+    "after": 286545,
+    "delta": 22359,
+    "percent": 8.463355363266789
+  },
+  "generated-cycle-1": {
+    "before": 264186,
+    "after": 287606,
+    "delta": 23420,
+    "percent": 8.864966349465906
+  },
+  "token-cycle-1": {
+    "before": 264186,
+    "after": 368363,
+    "delta": 104177,
+    "percent": 39.43320236500042
+  },
+  "native-cycle-2": {
+    "before": 264254,
+    "after": 264254,
+    "delta": 0,
+    "percent": 0.0
+  },
+  "unique-cycle-2": {
+    "before": 264254,
+    "after": 286612,
+    "delta": 22358,
+    "percent": 8.460799079673345
+  },
+  "generated-cycle-2": {
+    "before": 264254,
+    "after": 270506,
+    "delta": 6252,
+    "percent": 2.365905530285256
+  },
+  "token-cycle-2": {
+    "before": 264254,
+    "after": 351370,
+    "delta": 87116,
+    "percent": 32.96676682282955
+  }
+}

@@ -1,0 +1,41 @@
+Compiling 1 files with Solc 0.8.26
+Solc 0.8.26 finished in 1.93s
+Compiler run successful with warnings:
+Warning (2018): Function state mutability can be restricted to pure
+  --> test/ContractNetActors.sol:57:5:
+   |
+57 |     function _onReceive(Message calldata inbound) internal override {
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+  --> test/ContractNetActors.sol:67:5:
+   |
+67 |     function _onReceive(Message calldata inbound) internal override {
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/ContractNetActors.sol:140:5:
+    |
+140 |     function _onReceive(Message calldata inbound) internal override {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+
+Ran 4 tests for test/jaamas/FinalRegression.t.sol:FinalRegressionTest
+[FAIL: next call did not revert as expected] test_cancelDoesNotAcceptOldNotificationAsAcknowledgement() (gas: 1898072)
+[FAIL: next call did not revert as expected] test_completionBeforeDecisionDeliveryRejected() (gas: 1621531)
+[FAIL: next call did not revert as expected] test_contractNetRejectsLogicalOpeningBeforeStateChange() (gas: 848537)
+[FAIL: assertion failed: 1 != 0] test_withdrawalBeforeDeliveryClearsObsoleteDecision() (gas: 1628040)
+Suite result: FAILED. 0 passed; 4 failed; 0 skipped; finished in 1.44ms (1.51ms CPU time)
+
+Ran 1 test suite in 7.38ms (1.44ms CPU time): 0 tests passed, 4 failed, 0 skipped (4 total tests)
+
+Failing tests:
+Encountered 4 failing tests in test/jaamas/FinalRegression.t.sol:FinalRegressionTest
+[FAIL: next call did not revert as expected] test_cancelDoesNotAcceptOldNotificationAsAcknowledgement() (gas: 1898072)
+[FAIL: next call did not revert as expected] test_completionBeforeDecisionDeliveryRejected() (gas: 1621531)
+[FAIL: next call did not revert as expected] test_contractNetRejectsLogicalOpeningBeforeStateChange() (gas: 848537)
+[FAIL: assertion failed: 1 != 0] test_withdrawalBeforeDeliveryClearsObsoleteDecision() (gas: 1628040)
+
+Encountered a total of 4 failing tests, 0 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 4 failed tests

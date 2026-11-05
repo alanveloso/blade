@@ -1,0 +1,69 @@
+No files changed, compilation skipped
+
+Ran 2 tests for test/jaamas/FinalGas.t.sol:FinalGasTest
+[PASS] test_gasContractNetLifecycle() (gas: 197445)
+Logs:
+  cn cfp two peers: 151051
+  cn propose: 16404
+  cn evaluate: 30907
+  cn inform: 17797
+
+[PASS] test_gasSubscribeLifecycle() (gas: 2198702)
+Logs:
+  subscribe open: 135915
+  subscribe agree: 17810
+  subscribe notify: 15958
+  subscribe cancel: 96915
+  subscribe cancel ack: 16816
+
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 684.39µs (508.42µs CPU time)
+
+Ran 3 tests for test/GasRequest.t.sol:GasRequestTest
+[PASS] test_gas_exampleSynchronousInform() (gas: 1701289)
+Logs:
+  example request->inform (one tx): 120987
+
+[PASS] test_gas_requestAgreeInform() (gas: 256380)
+Logs:
+  startRequest: 106995
+  agree: 17609
+  inform: 17742
+  total: 142346
+
+[PASS] test_gas_requestRefuse() (gas: 241725)
+Logs:
+  first startRequest: 137932
+  refuse: 17739
+  next startRequest: 106995
+  refuse (2): 17747
+
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 763.79µs (852.18µs CPU time)
+
+Ran 1 test for test/jaamas/QueuedContractNet.t.sol:QueuedContractNetTest
+[PASS] test_gasEquivalentHonestDecisions() (gas: 1815529)
+Logs:
+  sync evaluate execution: 31635
+  queue evaluate execution: 77845
+  queue two deliveries execution: 23836
+  queue total execution: 101681
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 870.86µs (481.25µs CPU time)
+
+Ran 2 tests for test/audit/CorrelationAudit.t.sol:CorrelationAuditTest
+[PASS] test_gasAlternativesFirstAndSecondLifecycle() (gas: 7248100)
+Logs:
+  native first execution: 138060
+  native next execution: 135570
+  unique first execution: 157914
+  unique next execution: 157924
+  token first execution: 255320
+  token next execution: 233430
+
+[PASS] test_gasGeneratedIdsFirstAndSecondLifecycle() (gas: 2370695)
+Logs:
+  generated first execution: 161519
+  generated next execution: 137129
+
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.61ms (1.84ms CPU time)
+
+Ran 4 test suites in 3.67ms (3.93ms CPU time): 8 tests passed, 0 failed, 0 skipped (8 total tests)

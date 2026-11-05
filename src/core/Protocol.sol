@@ -5,5 +5,6 @@ pragma solidity ^0.8.26;
 enum Protocol {
     None,
     FipaRequest, // fipa-request
-    FipaContractNet // fipa-contract-net
+    FipaContractNet, // fipa-contract-net
+    FipaSubscribe // experimental native subset
 }

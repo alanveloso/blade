@@ -1,0 +1,24 @@
+No files changed, compilation skipped
+
+Ran 3 tests for test/GasRequest.t.sol:GasRequestTest
+[PASS] test_gas_exampleSynchronousInform() (gas: 1701289)
+Logs:
+  example request->inform (one tx): 120987
+
+[PASS] test_gas_requestAgreeInform() (gas: 256380)
+Logs:
+  startRequest: 106995
+  agree: 17609
+  inform: 17742
+  total: 142346
+
+[PASS] test_gas_requestRefuse() (gas: 241725)
+Logs:
+  first startRequest: 137932
+  refuse: 17739
+  next startRequest: 106995
+  refuse (2): 17747
+
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.02ms (1.12ms CPU time)
+
+Ran 1 test suite in 3.19ms (1.02ms CPU time): 3 tests passed, 0 failed, 0 skipped (3 total tests)

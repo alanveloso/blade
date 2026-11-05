@@ -1,0 +1,289 @@
+Compiling 97 files with Solc 0.8.26
+Solc 0.8.26 finished in 18.04s
+Compiler run successful with warnings:
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/core/RequestAgent.sol:185:9:
+    |
+185 |         Status storage s,
+    |         ^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/core/RequestAgent.sol:186:9:
+    |
+186 |         bool fromInitiator,
+    |         ^^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/core/RequestAgent.sol:187:9:
+    |
+187 |         bytes32 replyWith,
+    |         ^^^^^^^^^^^^^^^^^
+
+Warning (5667): Unused function parameter. Remove or comment out the variable name to silence this warning.
+   --> src/core/RequestAgent.sol:188:9:
+    |
+188 |         bytes32 inReplyTo
+    |         ^^^^^^^^^^^^^^^^^
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> src/core/RequestAgent.sol:184:5:
+    |
+184 |     function _assertCorrelated(
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+  --> test/ContractNetActors.sol:57:5:
+   |
+57 |     function _onReceive(Message calldata inbound) internal override {
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+  --> test/ContractNetActors.sol:67:5:
+   |
+67 |     function _onReceive(Message calldata inbound) internal override {
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/ContractNetActors.sol:140:5:
+    |
+140 |     function _onReceive(Message calldata inbound) internal override {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/behavior/EmbeddedApplicationBehavior.t.sol:112:5:
+    |
+112 |     function _embeddedDecide(bytes32 localId, BehaviorContext memory)
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/behavior/ExplicitExecutorGate.t.sol:117:5:
+    |
+117 |     function _behaviorStepGas() internal view override returns (uint256) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to view
+   --> test/behavior/ExplicitExecutorGate.t.sol:165:5:
+    |
+165 |     function test_rolesAreIndependentImmutables() public {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to view
+   --> test/benchmarks/candidates/DecoderCandidates.t.sol:118:5:
+    |
+118 |     function _candidateCall(bytes32 localId, BehaviorContext memory ctx, uint256 gasBudget)
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+2026-11-05T20:35:08.734462Z  WARN evm::traces: failed to flush signature cache err=failed to create file "/home/alanveloso/.foundry/cache/signatures": Read-only file system (os error 30)
+warning[block-timestamp]: usage of `block.timestamp` in a comparison may be manipulated by validators
+   ╭▸ src/core/ContractNetLib.sol:58:16
+   │
+58 │         return block.timestamp > replyBy;
+   │                ━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#block-timestamp
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ test/invariants/AgentHandler.sol:88:30
+   │
+88 │             bytes32 needle = bytes32(NEEDLE);
+   │                              ━━━━━━━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'bytes32' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ test/invariants/AgentHandler.sol:96:21
+   │
+96 │         bytes32 n = bytes32(NEEDLE);
+   │                     ━━━━━━━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'bytes32' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ src/core/ContractNetManager.sol:66:18
+   │
+66 │         c.live = uint32(n);
+   │                  ━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'uint32' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ src/core/ContractNetManager.sol:67:21
+   │
+67 │         c.invited = uint32(n);
+   │                     ━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'uint32' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+    ╭▸ test/invariants/RequestHandler.sol:276:21
+    │
+276 │         bytes32 n = bytes32(NEEDLE);
+    │                     ━━━━━━━━━━━━━━━
+    │
+    ├ note: consider disabling this lint if you're certain the cast is safe
+    │       
+    │       // casting to 'bytes32' is safe because [explain why]
+    │       // forge-lint: disable-next-line(unsafe-typecast)
+    │       
+    │       
+    ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[block-timestamp]: usage of `block.timestamp` in a comparison may be manipulated by validators
+    ╭▸ test/invariants/ContractNetHandler.sol:167:24
+    │
+167 │             assertTrue(block.timestamp > by, "expire only after replyBy");
+    │                        ━━━━━━━━━━━━━━━━━━━━
+    │
+    ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#block-timestamp
+
+warning[block-timestamp]: usage of `block.timestamp` in a comparison may be manipulated by validators
+    ╭▸ test/invariants/ContractNetHandler.sol:170:72
+    │
+170 │             if (phaseBefore == ContractNetLib.PART_CFPED && by != 0 && block.timestamp > by) {
+    │                                                                        ━━━━━━━━━━━━━━━━━━━━
+    │
+    ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#block-timestamp
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+    ╭▸ test/invariants/ContractNetHandler.sol:424:21
+    │
+424 │         bytes32 n = bytes32(NEEDLE);
+    │                     ━━━━━━━━━━━━━━━
+    │
+    ├ note: consider disabling this lint if you're certain the cast is safe
+    │       
+    │       // casting to 'bytes32' is safe because [explain why]
+    │       // forge-lint: disable-next-line(unsafe-typecast)
+    │       
+    │       
+    ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ test/benchmarks/candidates/CompactContextCandidate.t.sol:52:16
+   │
+52 │         return uint8(uint256(c.envelope) >> PERFORMATIVE_SHIFT);
+   │                ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'uint8' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ test/benchmarks/candidates/CompactContextCandidate.t.sol:56:16
+   │
+56 │         return uint8(uint256(c.envelope) >> PROTOCOL_SHIFT);
+   │                ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'uint8' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ test/AgentStorage.t.sol:57:26
+   │
+57 │         bytes32 needle = bytes32(UNIQUE_CONTENT);
+   │                          ━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'bytes32' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ test/benchmarks/candidates/CompactContextCandidate.t.sol:60:16
+   │
+60 │         return uint64(uint256(c.envelope) >> REPLY_BY_SHIFT);
+   │                ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'uint64' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ test/Request.t.sol:91:26
+   │
+91 │         bytes32 needle = bytes32(UNIQUE_CONTENT);
+   │                          ━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'bytes32' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+   ╭▸ test/ContractNet.t.sol:60:26
+   │
+60 │         bytes32 needle = bytes32(UNIQUE);
+   │                          ━━━━━━━━━━━━━━━
+   │
+   ├ note: consider disabling this lint if you're certain the cast is safe
+   │       
+   │       // casting to 'bytes32' is safe because [explain why]
+   │       // forge-lint: disable-next-line(unsafe-typecast)
+   │       
+   │       
+   ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+    ╭▸ test/ContractNetRobustness.t.sol:114:26
+    │
+114 │         bytes32 needle = bytes32(UNIQUE);
+    │                          ━━━━━━━━━━━━━━━
+    │
+    ├ note: consider disabling this lint if you're certain the cast is safe
+    │       
+    │       // casting to 'bytes32' is safe because [explain why]
+    │       // forge-lint: disable-next-line(unsafe-typecast)
+    │       
+    │       
+    ╰ help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+
+Running 1 tests for test/symbolic/ProtocolSymbolic.t.sol:RequestBytecodeProof
+[31mCounterexample: 
+    p_caller_address_2d996b1_00 = 0xaaaa0003
+    p_token_bytes32_474d4aa_00 = 0x176bca7f20de6c706c8908fd8c93579a30ed1d595dfd15e253fbb92f9be4c0a3[0m
+[31m[FAIL][0m check_peerTokenIsolation(address,bytes32) (paths: 4, time: 0.11s, bounds: [])
+Symbolic test result: 0 passed; 1 failed; time: 0.20s

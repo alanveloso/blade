@@ -1,0 +1,172 @@
+usage: halmos [-h] [--root ROOT] [--config FILE] [--contract CONTRACT_NAME]
+              [--match-contract CONTRACT_NAME_REGEX]
+              [--function FUNCTION_NAME_PREFIX]
+              [--match-test FUNCTION_NAME_REGEX]
+              [--panic-error-codes ERROR_CODE1,ERROR_CODE2,...]
+              [--invariant-depth MAX_BOUND] [--loop MAX_BOUND]
+              [--width MAX_WIDTH] [--depth MAX_DEPTH]
+              [--array-lengths NAME1={LENGTH1,LENGTH2,...},NAME2=LENGTH3,...]
+              [--default-array-lengths LENGTH1,LENGTH2,...]
+              [--default-bytes-lengths LENGTH1,LENGTH2,...]
+              [--storage-layout {solidity,generic}] [--ffi] [--version]
+              [--coverage-output COVERAGE_FILE_PATH] [--verbose]
+              [--statistics] [--no-status] [--debug] [--debug-config]
+              [--profile-instructions] [--json-output JSON_FILE_PATH]
+              [--minimal-json-output] [--print-steps] [--print-mem]
+              [--print-states] [--print-success-states]
+              [--print-failed-states] [--print-blocked-states]
+              [--print-setup-states] [--print-full-model] [--early-exit]
+              [--dump-smt-queries] [--dump-smt-directory DIRECTORY_PATH]
+              [--disable-gc] [--trace-memory]
+              [--trace-events EVENT1,EVENT2,...]
+              [--forge-build-out DIRECTORY_NAME]
+              [--solver {yices-2.6.5,yices-2.6.4,z3,bitwuzla-0.8.1,cvc5-1.2.1,yices,cvc5,cvc5-int,bitwuzla,bitwuzla-abs}]
+              [--smt-exp-by-const N] [--solver-timeout-branching TIMEOUT]
+              [--solver-timeout-assertion TIMEOUT] [--solver-max-memory SIZE]
+              [--solver-command COMMAND] [--solver-threads N] [--cache-solver]
+              [--symbolic-jump] [--flamegraph] [--test-parallel]
+              [--solver-parallel] [--log LOG_FILE_PATH]
+              [--uninterpreted-unknown-calls SELECTOR1,SELECTOR2,...]
+              [--return-size-of-unknown-calls BYTE_SIZE]
+
+options:
+  -h, --help            show this help message and exit
+  --root ROOT           project root directory (default: current working
+                        directory)
+  --config FILE         path to the config file (default: ROOT/halmos.toml)
+  --contract CONTRACT_NAME
+                        run tests in the given contract. Shortcut for
+                        `--match-contract '^{NAME}$'`. (default: '')
+  --match-contract CONTRACT_NAME_REGEX, -mc CONTRACT_NAME_REGEX
+                        run tests in contracts matching the given regex.
+                        Ignored if the --contract name is given. (default: '')
+  --function FUNCTION_NAME_PREFIX
+                        run tests matching the given prefix. Shortcut for
+                        `--match-test '^{PREFIX}'`. (default:
+                        '(check|invariant)_')
+  --match-test FUNCTION_NAME_REGEX, -mt FUNCTION_NAME_REGEX
+                        run tests matching the given regex. The --function
+                        prefix is automatically added, unless the regex starts
+                        with '^'. (default: '')
+  --panic-error-codes ERROR_CODE1,ERROR_CODE2,...
+                        specify Panic error codes to be treated as test
+                        failures; use '*' to include all error codes (default:
+                        '0x01')
+  --invariant-depth MAX_BOUND
+                        set depth for invariant testing (length of the
+                        stateful sequence of calls) (default: 2)
+  --loop MAX_BOUND      set loop unrolling bounds (default: 2)
+  --width MAX_WIDTH     set the max number of paths; 0 means unlimited
+                        (default: 0)
+  --depth MAX_DEPTH     set the maximum length in steps of a single path; 0
+                        means unlimited (default: 0)
+  --array-lengths NAME1={LENGTH1,LENGTH2,...},NAME2=LENGTH3,...
+                        specify lengths for dynamic-sized arrays, bytes, and
+                        string types. Lengths can be specified as a comma-
+                        separated list of integers enclosed in curly braces,
+                        or as a single integer.
+  --default-array-lengths LENGTH1,LENGTH2,...
+                        set default lengths for dynamic-sized arrays
+                        (excluding bytes and string) not specified in --array-
+                        lengths (default: '0,1,2')
+  --default-bytes-lengths LENGTH1,LENGTH2,...
+                        set default lengths for bytes and string types not
+                        specified in --array-lengths (default: '0,65,1024')
+  --storage-layout {solidity,generic}
+                        Select one of the available storage layout models. The
+                        generic model should only be necessary for vyper,
+                        huff, or unconventional storage patterns in yul.
+                        (default: 'solidity')
+  --ffi                 allow the usage of FFI to call external functions
+  --version             print the version number
+  --coverage-output COVERAGE_FILE_PATH
+                        generate coverage report at the given file path
+                        (disabled by default)
+
+Debugging options:
+  --verbose, -v         increase verbosity levels: -v, -vv, -vvv, ...
+  --statistics, -st     print statistics
+  --no-status           disable progress display
+  --debug               run in debug mode
+  --debug-config        debug config parsing (show all config values and their
+                        sources)
+  --profile-instructions
+                        profile instruction execution frequencies
+  --json-output JSON_FILE_PATH
+                        output test results in JSON
+  --minimal-json-output
+                        include minimal information in the JSON output
+  --print-steps         print every execution step
+  --print-mem           when --print-steps is enabled, also print memory
+                        contents
+  --print-states        print all final execution states
+  --print-success-states
+                        print successful execution states
+  --print-failed-states
+                        print failed execution states
+  --print-blocked-states
+                        print blocked execution states
+  --print-setup-states  print setup execution states
+  --print-full-model    print full counterexample model
+  --early-exit          stop after a counterexample is found
+  --dump-smt-queries    dump SMT queries for assertion violations
+  --dump-smt-directory DIRECTORY_PATH
+                        directory to dump SMT queries (defaults to temporary
+                        directory) (default: '')
+  --disable-gc          disable Python's automatic garbage collection for
+                        cyclic objects. This does not affect reference
+                        counting based garbage collection.
+  --trace-memory        trace memory allocations and deallocations
+  --trace-events EVENT1,EVENT2,...
+                        include specific events in traces (default:
+                        'LOG,SSTORE,SLOAD')
+
+Build options:
+  --forge-build-out DIRECTORY_NAME
+                        forge build artifacts directory name (default: 'out')
+
+Solver options:
+  --solver {yices-2.6.5,yices-2.6.4,z3,bitwuzla-0.8.1,cvc5-1.2.1,yices,cvc5,cvc5-int,bitwuzla,bitwuzla-abs}
+                        specify the SMT solver to use. If not specified,
+                        defaults to 'yices'. If --solver-command is used, this
+                        is ignored. (default: 'yices')
+  --smt-exp-by-const N  interpret constant power up to N (default: 2)
+  --solver-timeout-branching TIMEOUT
+                        set timeout for solving branching conditions; 0 means
+                        no timeout. Can specify a unit, e.g. '200ms', '5s',
+                        '2m', '1h', etc. (default: '1ms')
+  --solver-timeout-assertion TIMEOUT
+                        set timeout for solving assertion violation
+                        conditions; 0 means no timeout. Can specify a unit,
+                        e.g. '200ms', '5s', '2m', '1h', etc. (default: '60s')
+  --solver-max-memory SIZE
+                        set memory limit (in megabytes) for the solver; 0
+                        means no limit (default: 0)
+  --solver-command COMMAND
+                        use the given exact command when invoking the solver
+                        (overrides automatic solver detection/download
+                        triggered by --solver) (default: '')
+  --solver-threads N    set the number of threads for parallel solvers
+                        (default: number of CPUs)
+  --cache-solver        cache unsat queries using unsat cores
+
+Experimental options:
+  --symbolic-jump       support symbolic jump destination
+  --flamegraph          generate a flamegraph of the execution
+
+Deprecated options:
+  --test-parallel       (Deprecated; no-op) run tests in parallel
+  --solver-parallel     (Deprecated; no-op; use --solver-threads instead) run
+                        assertion solvers in parallel
+  --log LOG_FILE_PATH   (Deprecated; no-op) log every execution steps in JSON
+  --uninterpreted-unknown-calls SELECTOR1,SELECTOR2,...
+                        (Deprecated; no-op) use uninterpreted abstractions for
+                        unknown external calls with the given function
+                        signatures (default:
+                        '0x150b7a02,0x1626ba7e,0xf23a6e61,0xbc197c81')
+  --return-size-of-unknown-calls BYTE_SIZE
+                        (Deprecated; no-op) set the byte size of return data
+                        from uninterpreted unknown external calls (default:
+                        32)
+
+For more information, see https://github.com/a16z/halmos

@@ -1,0 +1,253 @@
+{
+    "exitcode": 0,
+    "test_results": {
+        "test/symbolic/CorrelationPolicySymbolic.t.sol:CorrelationPolicyBytecodeProof": [
+            {
+                "name": "check_strictManagerRejectsWrongInstance(bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    2,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.12544224199882592,
+                    0.11122934000013629,
+                    0.0141741590014135
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_strictParticipantRejectsWrongInstance(bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.09066780699868104,
+                    0.09064921199751552,
+                    1.3725999451708049e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_uniquePolicyNeverReopens(bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    3,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.11906640000233892,
+                    0.11904928700096207,
+                    1.324500044574961e-05
+                ],
+                "num_bounded_loops": 0
+            }
+        ],
+        "test/symbolic/ProtocolSymbolic.t.sol:ContractNetBytecodeProof": [
+            {
+                "name": "check_proposerAuthorization(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    3,
+                    2,
+                    0
+                ],
+                "time": [
+                    0.04598239700135309,
+                    0.04597271900274791,
+                    6.472000677604228e-06
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_uninvitedConversationIsolated(bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    2,
+                    2,
+                    0
+                ],
+                "time": [
+                    0.028166734999103937,
+                    0.028156967000541044,
+                    7.463997462764382e-06
+                ],
+                "num_bounded_loops": 0
+            }
+        ],
+        "test/symbolic/ProtocolSymbolic.t.sol:QueueBytecodeProof": [
+            {
+                "name": "check_earlyCompletionRejected(bool)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    3,
+                    2,
+                    0
+                ],
+                "time": [
+                    0.033533955000166316,
+                    0.03352349499982665,
+                    7.234000804601237e-06
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_withdrawalCleansQueue()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.04760528900078498,
+                    0.04759172400008538,
+                    1.038000118569471e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_wrongDeliveryTarget(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    2,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.018154159999539843,
+                    0.01811990599890123,
+                    2.9666000045835972e-05
+                ],
+                "num_bounded_loops": 0
+            }
+        ],
+        "test/symbolic/ProtocolSymbolic.t.sol:RequestBytecodeProof": [
+            {
+                "name": "check_authenticatedIdentity(address,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    5,
+                    4,
+                    0
+                ],
+                "time": [
+                    0.05887831400104915,
+                    0.05886847500005388,
+                    6.823000148870051e-06
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_peerTokenIsolation(address,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    4,
+                    3,
+                    0
+                ],
+                "time": [
+                    0.13260723399798735,
+                    0.13259694500084152,
+                    7.84499934525229e-06
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_requestedTransition(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    9,
+                    7,
+                    0
+                ],
+                "time": [
+                    0.31550802100173314,
+                    0.3137248749990249,
+                    0.0017801899994083215
+                ],
+                "num_bounded_loops": 0
+            }
+        ],
+        "test/symbolic/ProtocolSymbolic.t.sol:SubscribeBytecodeProof": [
+            {
+                "name": "check_cancelAcknowledgement(bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    3,
+                    2,
+                    0
+                ],
+                "time": [
+                    0.16661041399856913,
+                    0.1664562029982335,
+                    0.00015062400052556768
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_cancelFailureRestoresOpening()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.09875274499790976,
+                    0.09874342699913541,
+                    6.5829990489874035e-06
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_failureRollback(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    7,
+                    6,
+                    0
+                ],
+                "time": [
+                    0.47688820400071563,
+                    0.4768782959981763,
+                    7.003000064287335e-06
+                ],
+                "num_bounded_loops": 0
+            }
+        ]
+    }
+}

@@ -1,0 +1,200 @@
+{
+    "exitcode": 0,
+    "test_results": {
+        "test/symbolic/ProtocolSymbolic.t.sol:ContractNetBytecodeProof": [
+            {
+                "name": "check_proposerAuthorization(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    3,
+                    2,
+                    0
+                ],
+                "time": [
+                    0.0527985209992039,
+                    0.05278473499856773,
+                    1.0730000212788582e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_uninvitedConversationIsolated(bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    2,
+                    2,
+                    0
+                ],
+                "time": [
+                    0.03577822700026445,
+                    0.0357654530016589,
+                    9.578001481713727e-06
+                ],
+                "num_bounded_loops": 0
+            }
+        ],
+        "test/symbolic/ProtocolSymbolic.t.sol:QueueBytecodeProof": [
+            {
+                "name": "check_earlyCompletionRejected(bool)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    3,
+                    2,
+                    0
+                ],
+                "time": [
+                    0.03781521299970336,
+                    0.03779714899792452,
+                    1.2143002095399424e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_withdrawalCleansQueue()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.04398683500039624,
+                    0.04397912000058568,
+                    5.2489995141513646e-06
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_wrongDeliveryTarget(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    2,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.024611164000816643,
+                    0.024599021999165416,
+                    9.02700048754923e-06
+                ],
+                "num_bounded_loops": 0
+            }
+        ],
+        "test/symbolic/ProtocolSymbolic.t.sol:RequestBytecodeProof": [
+            {
+                "name": "check_authenticatedIdentity(address,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    5,
+                    4,
+                    0
+                ],
+                "time": [
+                    0.06226876900109346,
+                    0.06225015499876463,
+                    1.3215001672506332e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_peerTokenIsolation(address,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    4,
+                    3,
+                    0
+                ],
+                "time": [
+                    0.13548244300181977,
+                    0.13546882700029528,
+                    1.0219999239780009e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_requestedTransition(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    8,
+                    7,
+                    0
+                ],
+                "time": [
+                    0.3040014059988607,
+                    0.30399208800008637,
+                    7.15400165063329e-06
+                ],
+                "num_bounded_loops": 0
+            }
+        ],
+        "test/symbolic/ProtocolSymbolic.t.sol:SubscribeBytecodeProof": [
+            {
+                "name": "check_cancelAcknowledgement(bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    3,
+                    2,
+                    0
+                ],
+                "time": [
+                    0.1702010090011754,
+                    0.1701035049991333,
+                    9.292600225307979e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_cancelFailureRestoresOpening()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.09340971199708292,
+                    0.09340168699782225,
+                    5.689998943125829e-06
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_failureRollback(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    7,
+                    6,
+                    0
+                ],
+                "time": [
+                    0.49772437299907324,
+                    0.49771515599786653,
+                    6.792000931454822e-06
+                ],
+                "num_bounded_loops": 0
+            }
+        ]
+    }
+}

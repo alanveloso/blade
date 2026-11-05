@@ -1,0 +1,46 @@
+{
+    "exitcode": 1,
+    "test_results": {
+        "test/symbolic/ProtocolSymbolic.t.sol:RequestBytecodeProof": [
+            {
+                "name": "check_peerTokenIsolation(address,bytes32)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": [
+                    {
+                        "model": {
+                            "p_token_bytes32_474d4aa_00": {
+                                "full_name": "p_token_bytes32_474d4aa_00",
+                                "variable_name": "token",
+                                "solidity_type": "bytes32",
+                                "smt_type": "BitVec 256",
+                                "size_bits": 256,
+                                "value": 10593645733483185569198793155682606437741479683148309777590910740921338609827
+                            },
+                            "p_caller_address_2d996b1_00": {
+                                "full_name": "p_caller_address_2d996b1_00",
+                                "variable_name": "caller",
+                                "solidity_type": "address",
+                                "smt_type": "BitVec 256",
+                                "size_bits": 256,
+                                "value": 2863267843
+                            }
+                        },
+                        "is_valid": true
+                    }
+                ],
+                "num_paths": [
+                    4,
+                    2,
+                    0
+                ],
+                "time": [
+                    0.11138712699903408,
+                    0.11130434100050479,
+                    7.966100019984879e-05
+                ],
+                "num_bounded_loops": 0
+            }
+        ]
+    }
+}

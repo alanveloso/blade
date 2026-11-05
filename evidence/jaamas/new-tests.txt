@@ -1,0 +1,68 @@
+Compiling 3 files with Solc 0.8.26
+Solc 0.8.26 finished in 1.51s
+Compiler run successful!
+
+Ran 1 test for test/jaamas/SubscribeComposition.t.sol:SubscribeCompositionTest
+[PASS] test_sameIdentifierSeparateProtocolNamespaces() (gas: 2781755)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 438.37µs (185.36µs CPU time)
+
+Ran 3 tests for test/jaamas/FormalCounterexamples.t.sol:FormalCounterexamplesTest
+[PASS] test_authorizationCounterexamplesActuallyRevert() (gas: 803998)
+[PASS] test_transitionCounterexamplesActuallyRevert() (gas: 804156)
+[PASS] test_validPathsReachAssertions() (gas: 850840)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 782.98µs (421.13µs CPU time)
+
+Ran 3 tests for test/jaamas/QueuedContractNet.t.sol:QueuedContractNetTest
+[PASS] test_gasEquivalentHonestDecisions() (gas: 1752043)
+Logs:
+  sync evaluate execution: 31577
+  queue evaluate execution: 81845
+  queue two deliveries execution: 23778
+  queue total execution: 105623
+
+[PASS] test_queueIsolatesGasExhaustion() (gas: 2741733)
+[PASS] test_queueIsolatesRevertAndAllowsHonestCompletion() (gas: 2481109)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.38ms (1.60ms CPU time)
+
+Ran 1 test for test/jaamas/Interleaving.t.sol:RequestInterleavingTest
+[PASS] test_allSixTwoSessionSchedules() (gas: 1417778)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.16ms (1.81ms CPU time)
+
+Ran 3 tests for test/jaamas/SolidityPolicy.t.sol:SolidityPolicyTest
+[PASS] testFuzz_policyDecisions(uint64,uint64) (runs: 256, μ: 1909344, ~: 1915728)
+[PASS] test_contractDoesNotSelfSchedule() (gas: 1917334)
+[PASS] test_orderChangesResourceAllocation() (gas: 3153382)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 31.89ms (32.34ms CPU time)
+
+Ran 2 tests for test/jaamas/Interleaving.t.sol:ContractNetInterleavingTest
+[PASS] testFuzz_proposalOrderIndependent(bool) (runs: 256, μ: 193546, ~: 193544)
+[PASS] test_deadlineOrderChangesOutcome() (gas: 111968)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 42.32ms (41.93ms CPU time)
+
+Ran 11 tests for test/jaamas/Subscribe.t.sol:SubscribeTest
+[PASS] testFuzz_notificationsAndCancel(uint8) (runs: 256, μ: 297128, ~: 242390)
+[PASS] testFuzz_sessionIsolation(bool) (runs: 256, μ: 255788, ~: 255797)
+[PASS] testFuzz_wrongPeerAndToken(address,bytes32) (runs: 256, μ: 169670, ~: 169670)
+[PASS] test_cancelFailureResumes() (gas: 202420)
+[PASS] test_duplicateOpenAndCancelBeforeAgreementRejected() (gas: 147703)
+[PASS] test_invalidTransitionsAndRollback() (gas: 195218)
+[PASS] test_missingTokenAndForgedLogicalIdentityRejected() (gas: 31033)
+[PASS] test_notificationCancelRaceHasExplicitMeaning() (gas: 179593)
+[PASS] test_openFailureRollsBackBothEndpoints() (gas: 172540)
+[PASS] test_refuseFailureAndNotUnderstood() (gas: 328500)
+[PASS] test_reuseRejectsStaleNotification() (gas: 229872)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 53.14ms (112.88ms CPU time)
+
+Ran 1 test for test/jaamas/SubscribeInvariant.t.sol:SubscribeInvariantTest
+[PASS] invariant_endpointAgreementAndCorrelation() (runs: 48, calls: 1152, reverts: 0)
+
+╭------------------+----------+-------+---------+----------╮
+| Contract         | Selector | Calls | Reverts | Discards |
++==========================================================+
+| SubscribeHandler | step     | 1152  | 0       | 0        |
+╰------------------+----------+-------+---------+----------╯
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 509.29ms (508.57ms CPU time)
+
+Ran 8 test suites in 510.20ms (641.39ms CPU time): 25 tests passed, 0 failed, 0 skipped (25 total tests)
+2026-11-05T19:16:43.765461Z  WARN evm::traces: failed to flush signature cache err=failed to create file "/home/alanveloso/.foundry/cache/signatures": Read-only file system (os error 30)

@@ -1,0 +1,12 @@
+Compiling 2 files with Solc 0.8.26
+Solc 0.8.26 finished in 625.13ms
+Compiler run successful!
+
+Ran 3 tests for test/jaamas/FormalCounterexamples.t.sol:FormalCounterexamplesTest
+[PASS] test_authorizationCounterexamplesActuallyRevert() (gas: 803998)
+[PASS] test_transitionCounterexamplesActuallyRevert() (gas: 804156)
+[PASS] test_validPathsReachAssertions() (gas: 850840)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 513.53µs (444.80µs CPU time)
+
+Ran 1 test suite in 6.60ms (513.53µs CPU time): 3 tests passed, 0 failed, 0 skipped (3 total tests)
+2026-11-05T19:14:25.819965Z  WARN evm::traces: failed to flush signature cache err=failed to create file "/home/alanveloso/.foundry/cache/signatures": Read-only file system (os error 30)

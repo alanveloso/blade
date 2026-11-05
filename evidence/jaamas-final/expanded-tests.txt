@@ -1,0 +1,104 @@
+Compiling 5 files with Solc 0.8.26
+Solc 0.8.26 finished in 3.20s
+Compiler run successful with warnings:
+Warning (2018): Function state mutability can be restricted to pure
+  --> test/ContractNetActors.sol:57:5:
+   |
+57 |     function _onReceive(Message calldata inbound) internal override {
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+  --> test/ContractNetActors.sol:67:5:
+   |
+67 |     function _onReceive(Message calldata inbound) internal override {
+   |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to pure
+   --> test/ContractNetActors.sol:140:5:
+    |
+140 |     function _onReceive(Message calldata inbound) internal override {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+
+Ran 1 test for test/jaamas/SubscribeComposition.t.sol:SubscribeCompositionTest
+[PASS] test_sameIdentifierSeparateProtocolNamespaces() (gas: 3130351)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 600.86µs (361.20µs CPU time)
+
+Ran 4 tests for test/jaamas/FinalRegression.t.sol:FinalRegressionTest
+[PASS] test_cancelDoesNotAcceptOldNotificationAsAcknowledgement() (gas: 2181425)
+[PASS] test_completionBeforeDecisionDeliveryRejected() (gas: 1677329)
+[PASS] test_contractNetRejectsLogicalOpeningBeforeStateChange() (gas: 828811)
+[PASS] test_withdrawalBeforeDeliveryClearsObsoleteDecision() (gas: 1676689)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 1.40ms (790.92µs CPU time)
+
+Ran 3 tests for test/jaamas/QueuedContractNet.t.sol:QueuedContractNetTest
+[PASS] test_gasEquivalentHonestDecisions() (gas: 1815529)
+Logs:
+  sync evaluate execution: 31635
+  queue evaluate execution: 77845
+  queue two deliveries execution: 23836
+  queue total execution: 101681
+
+[PASS] test_queueIsolatesGasExhaustion() (gas: 2812084)
+[PASS] test_queueIsolatesRevertAndAllowsHonestCompletion() (gas: 2551488)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.90ms (1.84ms CPU time)
+
+Ran 1 test for test/jaamas/Interleaving.t.sol:RequestInterleavingTest
+[PASS] test_allSixTwoSessionSchedules() (gas: 1417778)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 2.88ms (2.48ms CPU time)
+
+Ran 2 tests for test/jaamas/Interleaving.t.sol:ContractNetInterleavingTest
+[PASS] testFuzz_proposalOrderIndependent(bool) (runs: 256, μ: 193638, ~: 193636)
+[PASS] test_deadlineOrderChangesOutcome() (gas: 112015)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 60.11ms (59.74ms CPU time)
+
+Ran 3 tests for test/jaamas/FormalCounterexamples.t.sol:FormalCounterexamplesTest
+[PASS] test_authorizationCounterexamplesActuallyRevert() (gas: 803998)
+[PASS] test_transitionCounterexamplesActuallyRevert() (gas: 804156)
+[PASS] test_validPathsReachAssertions() (gas: 850840)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 62.92ms (489.28µs CPU time)
+
+Ran 3 tests for test/jaamas/SolidityPolicy.t.sol:SolidityPolicyTest
+[PASS] testFuzz_policyDecisions(uint64,uint64) (runs: 256, μ: 1911628, ~: 1915728)
+[PASS] test_contractDoesNotSelfSchedule() (gas: 1917334)
+[PASS] test_orderChangesResourceAllocation() (gas: 3153382)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 62.99ms (63.52ms CPU time)
+
+Ran 8 tests for test/jaamas/AdversarialFinal.t.sol:AdversarialFinalTest
+[PASS] testFuzz_cancelRetryRejectsEarlierAcknowledgement(bool) (runs: 256, μ: 2206966, ~: 2199835)
+[PASS] testFuzz_queueOwnerAuthorization(address) (runs: 256, μ: 1523663, ~: 1523663)
+[PASS] testFuzz_queuedRejectDeliveryOrderAndCleanup(bool) (runs: 256, μ: 1734178, ~: 1734188)
+[PASS] test_contractNetSamePeerStaleTokenNotEnforcedOnReusedId() (gas: 159464)
+[PASS] test_nestedSubscribeCallbackFailureRollsBackAll() (gas: 2558780)
+[PASS] test_nestedSubscribeNotifyCancelAndAcknowledgement() (gas: 2290021)
+[PASS] test_queueStillCannotRecoverFromCfpRevert() (gas: 2510244)
+[PASS] test_queuedDeliveryReentrancyCannotDuplicateAndCanComplete() (gas: 2492543)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 63.02ms (174.40ms CPU time)
+
+Ran 11 tests for test/jaamas/Subscribe.t.sol:SubscribeTest
+[PASS] testFuzz_notificationsAndCancel(uint8) (runs: 256, μ: 382288, ~: 339229)
+[PASS] testFuzz_sessionIsolation(bool) (runs: 256, μ: 341925, ~: 341934)
+[PASS] testFuzz_wrongPeerAndToken(address,bytes32) (runs: 256, μ: 182182, ~: 182182)
+[PASS] test_cancelFailureResumes() (gas: 234634)
+[PASS] test_duplicateOpenRejectedAndOpeningCancellationAllowed() (gas: 234308)
+[PASS] test_invalidTransitionsAndRollback() (gas: 288566)
+[PASS] test_missingTokenAndForgedLogicalIdentityRejected() (gas: 40290)
+[PASS] test_notificationCancelRaceHasExplicitMeaning() (gas: 324160)
+[PASS] test_openFailureRollsBackBothEndpoints() (gas: 191096)
+[PASS] test_refuseFailureAndNotUnderstood() (gas: 346384)
+[PASS] test_reuseRejectsStaleNotification() (gas: 243263)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 66.15ms (168.27ms CPU time)
+
+Ran 1 test for test/jaamas/SubscribeInvariant.t.sol:SubscribeInvariantTest
+[PASS] invariant_endpointAgreementAndCorrelation() (runs: 48, calls: 1152, reverts: 0)
+
+╭------------------+----------+-------+---------+----------╮
+| Contract         | Selector | Calls | Reverts | Discards |
++==========================================================+
+| SubscribeHandler | step     | 1152  | 0       | 0        |
+╰------------------+----------+-------+---------+----------╯
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 952.09ms (951.29ms CPU time)
+
+Ran 10 test suites in 953.33ms (1.27s CPU time): 37 tests passed, 0 failed, 0 skipped (37 total tests)
+2026-11-05T19:38:03.014260Z  WARN evm::traces: failed to flush signature cache err=failed to create file "/home/alanveloso/.foundry/cache/signatures": Read-only file system (os error 30)

@@ -1,0 +1,3 @@
+Formatted /home/alanveloso/Código/blade-integrado/blade/test/jaamas/SubscribeInvariant.t.sol
+Formatted /home/alanveloso/Código/blade-integrado/blade/test/jaamas/AdversarialFinal.t.sol
+Formatted /home/alanveloso/Código/blade-integrado/blade/test/symbolic/ProtocolSymbolic.t.sol
