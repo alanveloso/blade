@@ -8,3 +8,6 @@ target
 out
 cache
 broadcast
+
+# Regenerated locally; published pack lives in blade-evaluation/revision/evidence/jaamas/
+evidence/

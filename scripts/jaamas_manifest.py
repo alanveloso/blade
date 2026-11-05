@@ -3,7 +3,7 @@
 import ast,hashlib,json,platform,re,shutil,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'evidence/jaamas-final'
+OUT=ROOT/'evidence/jaamas'
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def compare(a,b):return {'before':a,'after':b,'delta':b-a,'percent':100*(b-a)/a if a else None}
 def read(name):return json.loads((OUT/name).read_text())

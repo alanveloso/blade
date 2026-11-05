@@ -5,7 +5,7 @@ Run separately from jaamas_symbolic.py and jaamas_txgas.py to avoid competing bu
 import hashlib,json,os,shutil,subprocess,tarfile,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'evidence/jaamas-final'
+OUT=ROOT/'evidence/jaamas'
 
 def run(args,name,cwd=ROOT,env=None):
     with (OUT/name).open('w') as log:

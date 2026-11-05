@@ -2,7 +2,7 @@
 """Closing campaigns in isolated build directories. Historical evidence is never overwritten."""
 import hashlib,json,os,subprocess,tempfile
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'evidence/jaamas-close'
+ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'evidence/jaamas'
 with tempfile.TemporaryDirectory(prefix='blade-close-validation-') as d:
     env=dict(os.environ,FOUNDRY_OUT=d+'/out',FOUNDRY_CACHE_PATH=d+'/cache')
     def run(args,name,environment=env):

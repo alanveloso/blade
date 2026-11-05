@@ -1,1 +1,0 @@
-Formatted /home/alanveloso/Código/blade-integrado/blade/test/audit/CorrelationAudit.t.sol

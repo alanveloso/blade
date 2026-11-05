@@ -12,7 +12,7 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = Path(os.environ.get('BLADE_EVIDENCE_DIR', str(ROOT / 'evidence/jaamas-final/reproduction')))
+OUT = Path(os.environ.get('BLADE_EVIDENCE_DIR', str(ROOT / 'evidence/jaamas')))
 BASE = '6642b2f41ab0c89e8114e464fa4790a69985d4ad'
 OUT.mkdir(parents=True, exist_ok=True)
 

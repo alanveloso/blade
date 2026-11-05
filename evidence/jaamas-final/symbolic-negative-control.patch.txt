@@ -1,3 +1,0 @@
-if ((fromInitiator ? replyWith : inReplyTo) != s.replyWith)
-=> if (false)
-Temporary copy only. Production unchanged.

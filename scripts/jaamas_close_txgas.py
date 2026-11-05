@@ -3,7 +3,7 @@
 import io,json,os,subprocess,tarfile,tempfile,time,urllib.request,hashlib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'evidence/jaamas-close'
+OUT=ROOT/'evidence/jaamas'
 RPC='http://127.0.0.1:18547'
 BASE='6642b2f41ab0c89e8114e464fa4790a69985d4ad'
 ZERO='0x'+'00'*20

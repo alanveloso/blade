@@ -3,7 +3,7 @@
 import json,os,shutil,subprocess,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'evidence/jaamas-close'
+OUT=ROOT/'evidence/jaamas'
 HALMOS=os.environ.get('HALMOS','/tmp/blade-halmos/bin/halmos')
 Z3=os.environ.get('HALMOS_Z3','/tmp/blade-halmos/bin/z3')
 

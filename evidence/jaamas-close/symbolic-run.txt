@@ -1,1 +1,0 @@
-Positive checks and expected-failing mutation control executed.

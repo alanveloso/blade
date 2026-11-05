@@ -1,9 +1,0 @@
-Formatted /home/alanveloso/Código/blade-integrado/blade/experiments/QueuedContractNetManager.sol
-Formatted /home/alanveloso/Código/blade-integrado/blade/formal/RequestProperties.sol
-Formatted /home/alanveloso/Código/blade-integrado/blade/test/jaamas/SolidityPolicy.t.sol
-Formatted /home/alanveloso/Código/blade-integrado/blade/examples/SolidityPolicyExample.sol
-Formatted /home/alanveloso/Código/blade-integrado/blade/test/jaamas/Interleaving.t.sol
-Formatted /home/alanveloso/Código/blade-integrado/blade/test/jaamas/QueuedContractNet.t.sol
-Formatted /home/alanveloso/Código/blade-integrado/blade/src/core/SubscribeAgent.sol
-Formatted /home/alanveloso/Código/blade-integrado/blade/test/jaamas/Subscribe.t.sol
-Formatted /home/alanveloso/Código/blade-integrado/blade/test/jaamas/SubscribeInvariant.t.sol

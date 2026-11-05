@@ -2,7 +2,7 @@
 """Verify closing evidence without modifying any earlier source or result."""
 import hashlib,json,platform,re,subprocess
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'evidence/jaamas-close'
+ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'evidence/jaamas'
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def read(n):return json.loads((OUT/n).read_text())
 def delta(a,b):return {'before':a,'after':b,'delta':b-a,'percent':100*(b-a)/a}
