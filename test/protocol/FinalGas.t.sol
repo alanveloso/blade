@@ -30,11 +30,9 @@ contract FinalGasTest is NetFixture {
     }
 
     function test_gasContractNetLifecycle() public {
-        bytes32 id = bytes32(uint256(1));
-        Message memory m = _cfp(id, uint64(block.timestamp + 100));
         address[] memory peers = _two(address(p1), address(p2));
+        (bytes32 id, Message memory m) = _open(peers, uint64(block.timestamp + 100));
         uint256 g = gasleft();
-        manager.cfp(peers, m);
         emit log_named_uint("cn cfp two peers", g - gasleft());
         Message memory proposal = _out(m, Performative.Propose);
         g = gasleft();

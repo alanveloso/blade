@@ -7,7 +7,7 @@ import {Message} from "../src/core/Message.sol";
 import {Performative} from "../src/core/Performative.sol";
 import {Protocol} from "../src/core/Protocol.sol";
 
-/// @dev Application wrapper: Core keeps `_startRequest` internal.
+/// @dev Application wrapper: BLADE keeps `_startRequest` internal.
 contract ExampleRequester is RequestAgent {
     constructor(address trustedRelay_) Agent(trustedRelay_) {}
 

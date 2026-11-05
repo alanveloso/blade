@@ -76,9 +76,8 @@ contract RequestInterleavingTest is Test {
 
 contract ContractNetInterleavingTest is NetFixture {
     function testFuzz_proposalOrderIndependent(bool reverse) public {
-        bytes32 id = keccak256("permutation");
-        Message memory cfp = _cfp(id, uint64(block.timestamp + 100));
-        manager.cfp(_two(address(p1), address(p2)), cfp);
+        (bytes32 id, Message memory cfp) =
+            _open(_two(address(p1), address(p2)), uint64(block.timestamp + 100));
         if (reverse) {
             p2.respond(cfp, address(manager), _out(cfp, Performative.Propose));
             p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
@@ -95,10 +94,8 @@ contract ContractNetInterleavingTest is NetFixture {
     }
 
     function test_deadlineOrderChangesOutcome() public {
-        bytes32 id = keccak256("deadline-race");
         uint64 deadline = uint64(block.timestamp + 100);
-        Message memory cfp = _cfp(id, deadline);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), deadline);
         uint256 snapshot = vm.snapshotState();
         vm.warp(deadline);
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));

@@ -8,17 +8,17 @@ import {Message} from "../src/core/Message.sol";
 import {Performative} from "../src/core/Performative.sol";
 import {Protocol} from "../src/core/Protocol.sol";
 
-/// @dev Application wrapper around `_cfp` / `_evaluate`. Selection policy lives here, not in Core.
+/// @dev Application wrapper around `_cfp` / `_evaluate`. Selection policy lives here, not in BLADE.
 contract ExampleManager is ContractNetManager {
     constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
-    function cfp(address[] calldata participants, bytes32 conversationId, uint64 replyBy) external {
+    /// @dev Pass `conversationId == 0`; BLADE assigns and returns the identifier.
+    function cfp(address[] calldata participants, uint64 replyBy) external returns (bytes32) {
         Message memory message;
         message.performative = uint8(Performative.Cfp);
         message.protocol = uint8(Protocol.FipaContractNet);
-        message.conversationId = conversationId;
         message.replyBy = replyBy;
-        _cfp(participants, message);
+        return _cfp(participants, message);
     }
 
     function evaluate(

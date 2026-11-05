@@ -6,7 +6,7 @@ import {Message, MessageLib} from "./Message.sol";
 
 /// @title Generic blockchain-resident agent endpoint.
 /// @dev Native transport identity is `msg.sender`; a configured trusted relay may carry an opaque
-/// logical sender. The Core never stores a full `Message` or `content`.
+/// logical sender. BLADE never stores a full `Message` or `content`.
 contract Agent is IAgent {
     address public immutable trustedRelay;
 

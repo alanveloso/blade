@@ -10,8 +10,11 @@ import {Performative} from "../src/core/Performative.sol";
 contract ExposedContractNetManager is ContractNetManager {
     constructor(address trustedRelay_) Agent(trustedRelay_) {}
 
-    function cfp(address[] calldata participants, Message memory message) external {
-        _cfp(participants, message);
+    function cfp(address[] calldata participants, Message memory message)
+        external
+        returns (bytes32)
+    {
+        return _cfp(participants, message);
     }
 
     function evaluate(
@@ -186,7 +189,7 @@ contract BatchingContractNetManager is ExposedContractNetManager {
     }
 }
 
-/// @dev Application wrapper that gates the decision primitives (the Core does not).
+/// @dev Application wrapper that gates the decision primitives (BLADE does not).
 contract OwnerGatedContractNetManager is ContractNetManager {
     address public immutable owner;
 
@@ -196,9 +199,12 @@ contract OwnerGatedContractNetManager is ContractNetManager {
         owner = msg.sender;
     }
 
-    function cfp(address[] calldata participants, Message memory message) external {
+    function cfp(address[] calldata participants, Message memory message)
+        external
+        returns (bytes32)
+    {
         if (msg.sender != owner) revert NotOwner();
-        _cfp(participants, message);
+        return _cfp(participants, message);
     }
 
     function evaluate(
@@ -230,12 +236,12 @@ contract DecisionRecordingParticipant is ExposedContractNetParticipant {
     }
 }
 
-/// @dev Deployable Core role with no application `cfp`/`evaluate` selectors.
+/// @dev Deployable protocol role with no application `cfp`/`evaluate` selectors.
 contract BareContractNetManager is ContractNetManager {
     constructor(address trustedRelay_) Agent(trustedRelay_) {}
 }
 
-/// @dev Deployable Core role with no application `respond` selector.
+/// @dev Deployable protocol role with no application `respond` selector.
 contract BareContractNetParticipant is ContractNetParticipant {
     constructor(address trustedRelay_) Agent(trustedRelay_) {}
 }

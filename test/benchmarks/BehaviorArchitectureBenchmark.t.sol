@@ -85,7 +85,7 @@ contract MatchedEmbeddedAgent is EmbeddedApplicationBehaviorHost, MatchedEffectS
     }
 }
 
-/// @dev Paired engineering counterfactual. Not a BLADE release comparison and not JAAMAS evidence.
+/// @dev Paired engineering counterfactual. Not a BLADE release comparison.
 ///      The same Context and Application Action reach the same trusted effect; only the decide
 ///      locus differs.
 contract BehaviorArchitectureBenchmarkTest is Test {

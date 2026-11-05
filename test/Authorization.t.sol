@@ -82,15 +82,15 @@ contract AuthorizationTest is Test {
     }
 
     function test_rejectedCfpLeavesEmptySession() public {
-        bytes32 blocked = keccak256("deny-cfp");
-        GatingCnParticipant gated = new GatingCnParticipant(blocked);
         ExposedContractNetManager manager = new ExposedContractNetManager(address(0));
+        // First BLADE-assigned id for this manager; gate blocks that exact envelope.
+        bytes32 blocked = keccak256(abi.encode(block.chainid, address(manager), uint256(1)));
+        GatingCnParticipant gated = new GatingCnParticipant(blocked);
         address[] memory parts = new address[](1);
         parts[0] = address(gated);
         Message memory cfp;
         cfp.performative = uint8(Performative.Cfp);
         cfp.protocol = uint8(Protocol.FipaContractNet);
-        cfp.conversationId = blocked;
         cfp.replyBy = uint64(block.timestamp + 10);
         vm.expectRevert(InboundDenied.selector);
         manager.cfp(parts, cfp);
@@ -105,13 +105,11 @@ contract AuthorizationTest is Test {
         ExposedContractNetManager manager = new ExposedContractNetManager(address(0));
         address[] memory parts = new address[](1);
         parts[0] = address(gated);
-        bytes32 id = keccak256("ok-cfp");
         Message memory cfp;
         cfp.performative = uint8(Performative.Cfp);
         cfp.protocol = uint8(Protocol.FipaContractNet);
-        cfp.conversationId = id;
         cfp.replyBy = uint64(block.timestamp + 10);
-        manager.cfp(parts, cfp);
+        bytes32 id = manager.cfp(parts, cfp);
         assertEq(gated.session(id).phase, ContractNetLib.PART_CFPED);
         assertEq(gated.session(id).manager, address(manager));
     }

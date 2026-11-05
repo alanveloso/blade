@@ -9,6 +9,7 @@ import {
     AuditTokenParticipant
 } from "../../experiments/audit/ContractNetAlternatives.sol";
 import {ExposedContractNetParticipant} from "../ContractNetActors.sol";
+import {ContractNetManager} from "../../src/core/ContractNetManager.sol";
 import {Message} from "../../src/core/Message.sol";
 import {Performative} from "../../src/core/Performative.sol";
 import {ContractNetLib} from "../../src/core/ContractNetLib.sol";
@@ -17,38 +18,46 @@ contract CorrelationAuditTest is NetFixture {
     bytes32 constant ID = bytes32(uint256(1));
 
     function test_replayOldProposalThroughActualParticipantPrimitive() public {
-        Message memory old = _cfp(ID, uint64(block.timestamp + 100));
-        manager.cfp(_one(address(p1)), old);
+        (bytes32 id, Message memory old) = _open(_one(address(p1)), uint64(block.timestamp + 100));
         p1.respond(old, address(manager), _out(old, Performative.Refuse));
-        Message memory fresh = _cfp(ID, uint64(block.timestamp + 200));
+        (bytes32 freshId, Message memory fresh) =
+            _open(_one(address(p1)), uint64(block.timestamp + 200));
         fresh.replyWith = bytes32(uint256(99));
-        manager.cfp(_one(address(p1)), fresh);
-        // No prank: stale application envelope travels through both real protocol primitives.
+        assertNotEq(freshId, id);
+        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         p1.respond(old, address(manager), _out(old, Performative.Propose));
-        assertEq(manager.slotOf(ID, address(p1)), ContractNetLib.SLOT_PROPOSED);
-        assertEq(p1.session(ID).phase, ContractNetLib.PART_PROPOSED);
+        assertEq(manager.slotOf(freshId, address(p1)), ContractNetLib.SLOT_INVITED);
+        assertEq(p1.session(freshId).phase, ContractNetLib.PART_CFPED);
     }
 
     function test_replayOldCompletionPrematurelyClosesNewInstance() public {
-        Message memory old = _proposeAll(ID, _one(address(p1)));
-        manager.evaluate(ID, _one(address(p1)), _empty(), _empty());
+        (bytes32 oldId, Message memory old) = _proposeAll(_one(address(p1)));
+        manager.evaluate(oldId, _one(address(p1)), _empty(), _empty());
         p1.respond(old, address(manager), _out(old, Performative.Inform));
-        Message memory fresh = _proposeAll(ID, _one(address(p1)));
-        manager.evaluate(ID, _one(address(p1)), _empty(), _empty());
+        (bytes32 freshId, Message memory fresh) = _proposeAll(_one(address(p1)));
+        manager.evaluate(freshId, _one(address(p1)), _empty(), _empty());
         assertGt(fresh.replyBy, old.replyBy);
+        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         p1.respond(old, address(manager), _out(old, Performative.Inform));
-        assertEq(manager.conversation(ID).live, 0);
-        assertEq(p1.session(ID).phase, 0);
+        assertEq(manager.conversation(freshId).live, 1);
+        assertEq(p1.session(freshId).phase, ContractNetLib.PART_ACCEPTED);
+    }
+
+    function test_nonZeroOpeningConversationIdRevertsOnCoreManager() public {
+        Message memory m = _cfp(uint64(block.timestamp + 100));
+        m.conversationId = ID;
+        vm.expectRevert(ContractNetManager.ConversationIdAssignedByBlade.selector);
+        manager.cfp(_one(address(p1)), m);
     }
 
     function test_uniqueIdsRejectReuseAndOldMessages() public {
         AuditUniqueManager u = new AuditUniqueManager();
-        Message memory old = _cfp(ID, uint64(block.timestamp + 100));
+        Message memory old = _cfpWithId(ID, uint64(block.timestamp + 100));
         u.cfp(_one(address(p1)), old);
         p1.respond(old, address(u), _out(old, Performative.Refuse));
         vm.expectRevert(bytes("used id"));
         u.cfp(_one(address(p1)), old);
-        Message memory fresh = _cfp(bytes32(uint256(2)), uint64(block.timestamp + 100));
+        Message memory fresh = _cfpWithId(bytes32(uint256(2)), uint64(block.timestamp + 100));
         u.cfp(_one(address(p1)), fresh);
         vm.prank(address(p1));
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
@@ -58,7 +67,7 @@ contract CorrelationAuditTest is NetFixture {
 
     function test_generatedIdsNeedNoPerIdTombstone() public {
         AuditGeneratedIdManager g = new AuditGeneratedIdManager();
-        Message memory m = _cfp(bytes32(0), uint64(block.timestamp + 100));
+        Message memory m = _cfp(uint64(block.timestamp + 100));
         bytes32 first = g.open(_one(address(p1)), m);
         m.conversationId = first;
         p1.respond(m, address(g), _out(m, Performative.Refuse));
@@ -76,7 +85,7 @@ contract CorrelationAuditTest is NetFixture {
     function testFuzz_strictTokensRejectStaleBothDirections(bytes32 wrong) public {
         AuditTokenManager t = new AuditTokenManager();
         AuditTokenParticipant p = new AuditTokenParticipant();
-        Message memory m = _cfp(ID, uint64(block.timestamp + 100));
+        Message memory m = _cfpWithId(ID, uint64(block.timestamp + 100));
         m.replyWith = bytes32(0);
         t.cfp(_one(address(p)), m);
         m.replyWith = t.token(ID);
@@ -110,7 +119,7 @@ contract CorrelationAuditTest is NetFixture {
 
     function test_strictTokensBreakLegacyContinuationEnvelopes() public {
         AuditTokenManager t = new AuditTokenManager();
-        Message memory m = _cfp(ID, uint64(block.timestamp + 100));
+        Message memory m = _cfpWithId(ID, uint64(block.timestamp + 100));
         m.replyWith = bytes32(0);
         t.cfp(_one(address(p1)), m);
         vm.expectRevert(bytes("token"));
@@ -121,7 +130,7 @@ contract CorrelationAuditTest is NetFixture {
     function test_tokenPrototypeInheritedExpiryLeavesAuxiliaryToken() public {
         AuditTokenManager t = new AuditTokenManager();
         AuditTokenParticipant p = new AuditTokenParticipant();
-        Message memory m = _cfp(ID, uint64(block.timestamp + 100));
+        Message memory m = _cfpWithId(ID, uint64(block.timestamp + 100));
         m.replyWith = bytes32(0);
         t.cfp(_one(address(p)), m);
         bytes32 opened = t.token(ID);
@@ -138,7 +147,7 @@ contract CorrelationAuditTest is NetFixture {
         AuditGeneratedIdManager m = new AuditGeneratedIdManager();
         ExposedContractNetParticipant p = new ExposedContractNetParticipant(address(0));
         for (uint256 i = 1; i <= 2; ++i) {
-            Message memory c = _cfp(bytes32(0), uint64(block.timestamp + 100));
+            Message memory c = _cfp(uint64(block.timestamp + 100));
             c.replyWith = bytes32(0);
             address[] memory peers = _one(address(p));
             address[] memory empty = _empty();
@@ -180,7 +189,7 @@ contract CorrelationAuditTest is NetFixture {
     ) internal {
         for (uint256 i = 1; i <= 2; ++i) {
             bytes32 id = bytes32(i);
-            Message memory c = _cfp(id, uint64(block.timestamp + 100));
+            Message memory c = _cfpWithId(id, uint64(block.timestamp + 100));
             c.replyWith = bytes32(0);
             address[] memory peers = _one(address(p));
             address[] memory empty = _empty();
