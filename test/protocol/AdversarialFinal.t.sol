@@ -116,46 +116,46 @@ contract AdversarialFinalTest is NetFixture {
     function test_queuedDeliveryReentrancyCannotDuplicateAndCanComplete() public {
         QueuedContractNetManager q = new QueuedContractNetManager();
         CompletingQueuedPeer peer = new CompletingQueuedPeer();
-        Message memory m = _cfp(ID, uint64(block.timestamp + 100));
-        q.cfp(_one(address(peer)), m);
+        Message memory m = _cfp(uint64(block.timestamp + 100));
+        bytes32 id = q.cfp(_one(address(peer)), m);
+        m.conversationId = id;
         peer.respond(m, address(q), _out(m, Performative.Propose));
         vm.warp(block.timestamp + 101);
-        q.evaluate(ID, _one(address(peer)), _empty(), _empty());
-        q.deliver(ID, address(peer));
+        q.evaluate(id, _one(address(peer)), _empty(), _empty());
+        q.deliver(id, address(peer));
         assertFalse(peer.duplicateSucceeded());
-        assertEq(q.pendingCount(ID), 0);
-        assertEq(q.conversation(ID).live, 0);
+        assertEq(q.pendingCount(id), 0);
+        assertEq(q.conversation(id).live, 0);
     }
 
     function testFuzz_queuedRejectDeliveryOrderAndCleanup(bool reverse) public {
         QueuedContractNetManager q = new QueuedContractNetManager();
-        Message memory m = _cfp(ID, uint64(block.timestamp + 100));
-        q.cfp(_two(address(p1), address(p2)), m);
+        Message memory m = _cfp(uint64(block.timestamp + 100));
+        bytes32 id = q.cfp(_two(address(p1), address(p2)), m);
+        m.conversationId = id;
         p1.respond(m, address(q), _out(m, Performative.Propose));
         p2.respond(m, address(q), _out(m, Performative.Propose));
         vm.warp(block.timestamp + 101);
-        q.evaluate(ID, _empty(), _two(address(p1), address(p2)), _empty());
-        assertEq(q.conversation(ID).live, 0);
-        vm.expectRevert(bytes("pending decisions"));
-        q.cfp(_one(address(p1)), m);
-        q.deliver(ID, reverse ? address(p1) : address(p2));
-        assertEq(q.pendingCount(ID), 1);
-        q.deliver(ID, reverse ? address(p2) : address(p1));
-        assertEq(q.pendingCount(ID), 0);
-        assertEq(p1.session(ID).phase, 0);
-        assertEq(p2.session(ID).phase, 0);
-        m.replyBy = uint64(block.timestamp + 100);
-        q.cfp(_one(address(p1)), m);
+        q.evaluate(id, _empty(), _two(address(p1), address(p2)), _empty());
+        assertEq(q.conversation(id).live, 0);
+        Message memory reopen = _cfp(uint64(block.timestamp + 100));
+        bytes32 id2 = q.cfp(_one(address(p1)), reopen);
+        assertNotEq(id2, id);
+        q.deliver(id, reverse ? address(p1) : address(p2));
+        assertEq(q.pendingCount(id), 1);
+        q.deliver(id, reverse ? address(p2) : address(p1));
+        assertEq(q.pendingCount(id), 0);
+        assertEq(p1.session(id).phase, 0);
+        assertEq(p2.session(id).phase, 0);
     }
 
     function test_queueStillCannotRecoverFromCfpRevert() public {
         QueuedContractNetManager q = new QueuedContractNetManager();
         RevertOnCfpParticipant bad = new RevertOnCfpParticipant();
         vm.expectRevert(bytes("cfp-handle-revert"));
-        q.cfp(_two(address(p1), address(bad)), _cfp(ID, uint64(block.timestamp + 100)));
-        assertEq(q.conversation(ID).live, 0);
-        assertEq(p1.session(ID).phase, 0);
-        assertEq(q.pendingCount(ID), 0);
+        q.cfp(_two(address(p1), address(bad)), _cfp(uint64(block.timestamp + 100)));
+        assertEq(p1.session(bytes32(0)).phase, 0);
+        assertEq(q.pendingCount(bytes32(0)), 0);
     }
 
     function testFuzz_queueOwnerAuthorization(address caller) public {
@@ -163,11 +163,10 @@ contract AdversarialFinalTest is NetFixture {
         QueuedContractNetManager q = new QueuedContractNetManager();
         vm.prank(caller);
         vm.expectRevert(bytes("owner"));
-        q.cfp(_one(address(p1)), _cfp(ID, uint64(block.timestamp + 100)));
+        q.cfp(_one(address(p1)), _cfp(uint64(block.timestamp + 100)));
         vm.prank(caller);
         vm.expectRevert(bytes("owner"));
-        q.evaluate(ID, _empty(), _empty(), _empty());
-        assertEq(q.conversation(ID).live, 0);
+        q.evaluate(bytes32(0), _empty(), _empty(), _empty());
     }
 
     function testFuzz_invalidCancelEnvelopePreservesState(bytes32 wrong) public {
@@ -221,38 +220,39 @@ contract AdversarialFinalTest is NetFixture {
     function test_contractNetManagerRejectsLogicalContinuation() public {
         address relay = address(0xbeef);
         ExposedContractNetManager gated = new ExposedContractNetManager(relay);
-        Message memory m = _cfp(ID, uint64(block.timestamp + 100));
-        gated.cfp(_one(address(p1)), m);
+        Message memory m = _cfp(uint64(block.timestamp + 100));
+        bytes32 id = gated.cfp(_one(address(p1)), m);
+        m.conversationId = id;
         m = _out(m, Performative.Propose);
         m.logicalSender = bytes32(uint256(1));
         vm.prank(relay);
         vm.expectRevert(ContractNetLib.UnexpectedPeer.selector);
         gated.handle(m);
-        assertEq(gated.slotOf(ID, address(p1)), ContractNetLib.SLOT_INVITED);
+        assertEq(gated.slotOf(id, address(p1)), ContractNetLib.SLOT_INVITED);
     }
 
     function test_contractNetRejectDecisionBeforeProposal() public {
-        Message memory m = _cfp(ID, uint64(block.timestamp + 100));
-        manager.cfp(_one(address(p1)), m);
+        (bytes32 id, Message memory m) = _open(_one(address(p1)), uint64(block.timestamp + 100));
         m = _out(m, Performative.RejectProposal);
         vm.prank(address(manager));
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         p1.handle(m);
-        assertEq(p1.session(ID).phase, ContractNetLib.PART_CFPED);
+        assertEq(p1.session(id).phase, ContractNetLib.PART_CFPED);
     }
 
-    /// @dev Residual design limit, not an anti-replay claim: CN has no session nonce.
+    /// @dev BLADE-assigned ids: stale envelopes from a prior instance do not attach to the new one.
     function test_contractNetSamePeerStaleTokenNotEnforcedOnReusedId() public {
-        Message memory m = _cfp(ID, uint64(block.timestamp + 100));
-        manager.cfp(_one(address(p1)), m);
+        (bytes32 first, Message memory m) = _open(_one(address(p1)), uint64(block.timestamp + 100));
         p1.respond(m, address(manager), _out(m, Performative.Refuse));
-        m.replyBy = uint64(block.timestamp + 200);
-        m.replyWith = bytes32(uint256(77));
-        manager.cfp(_one(address(p1)), m);
+        (bytes32 second, Message memory fresh) =
+            _open(_one(address(p1)), uint64(block.timestamp + 200));
+        fresh.replyWith = bytes32(uint256(77));
+        assertNotEq(second, first);
         Message memory stale = _out(m, Performative.Propose);
         stale.inReplyTo = bytes32(uint256(88));
         vm.prank(address(p1));
+        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         manager.handle(stale);
-        assertEq(manager.slotOf(ID, address(p1)), ContractNetLib.SLOT_PROPOSED);
+        assertEq(manager.slotOf(second, address(p1)), ContractNetLib.SLOT_INVITED);
     }
 }

@@ -4,7 +4,7 @@
 
 It implements **selected FIPA interaction semantics**. It does not claim complete FIPA compliance.
 
-## Core
+## On-chain types
 
 | Type | Role |
 |---|---|
@@ -16,16 +16,22 @@ It implements **selected FIPA interaction semantics**. It does not claim complet
 
 Application contracts inherit these types and expose their own external methods around the internal primitives. Protocol selection is an application concern.
 
-`Agent.handle` authenticates the caller, then calls `_authorizeInbound` (default: allow all) **before** any Request or Contract Net state mutation. Applications may override that hook; the Core does not impose an owner.
+`Agent.handle` authenticates the caller, then calls `_authorizeInbound` (default: allow all) **before** any Request or Contract Net state mutation. Applications may override that hook; BLADE does not impose an owner.
 
 Protocol role types are abstract capabilities. A leaf agent initializes `Agent` once. One blockchain-resident contract may compose Request, Contract Net manager, and Contract Net participant by inheriting all three and routing inbound messages through the capability handlers (see `examples/CompositeExample.sol`). The composed leaf does not copy protocol FSMs; it only chooses which handler owns the message, then `Agent._reply` runs once.
 
-Request and Contract Net maintain independent protocol-state namespaces, so protocol state does not collide even if identifiers coincide. Applications should nevertheless use distinct conversation identifiers for distinct interactions.
+Request and Contract Net maintain independent protocol-state namespaces. Request still uses
+application-chosen `conversationId` values; Contract Net opening assigns the id in BLADE.
 
-Being Contract Net **manager and participant of the same Contract Net conversation** is unsupported and is not dual-routed: opening a manager CFP while a participant session exists for that id reverts; inbound CN on a live manager conversation is handled only as manager (a colliding participant CFP reverts). Internal revert selectors on invalid composed paths are not claimed equivalent to every standalone role.
+Being Contract Net **manager and participant of the same Contract Net conversation** is unsupported
+and is not dual-routed. Internal revert selectors on invalid composed paths are not claimed
+equivalent to every standalone role.
 
-Request correlation: `_startRequest` assigns a single-use `replyWith` token (leave it zero); every later act must carry it (`inReplyTo` from the participant, `replyWith` from the initiator). Trust assumptions, limitations and gas impact are in [`docs/SECURITY.md`](docs/SECURITY.md).
-Protocol revision notes (Subscribe, CN limits, evidence pointer): [`docs/PROTOCOL_REVISION.md`](docs/PROTOCOL_REVISION.md).
+Request correlation: `_startRequest` assigns a single-use `replyWith` token (leave it zero); every
+later act must carry it (`inReplyTo` from the participant, `replyWith` from the initiator).
+Contract Net opening: pass `conversationId == 0` to `_cfp`; BLADE assigns and returns
+`keccak256(chainId, address(this), ++nonce)`. Trust assumptions and limitations:
+[`docs/SECURITY.md`](docs/SECURITY.md).
 
 Minimal patterns: `examples/RequestExample.sol`, `examples/ContractNetExample.sol`, `examples/CompositeExample.sol`, `examples/SolidityPolicyExample.sol`.
 

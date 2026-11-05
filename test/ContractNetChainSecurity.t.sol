@@ -13,7 +13,7 @@ import {
 } from "./ContractNetActors.sol";
 
 /// @dev Blockchain-specific properties of Contract Net: ordering, deadlines, `block.timestamp`,
-/// third-party calls, completed conversations, isolation, and what the Core does *not* protect
+/// third-party calls, completed conversations, isolation, and what BLADE does *not* protect
 /// (front-running, proposal confidentiality).
 contract ContractNetChainSecurityTest is Test {
     ExposedContractNetManager internal manager;
@@ -29,13 +29,21 @@ contract ContractNetChainSecurityTest is Test {
         }
     }
 
-    function _cfp(bytes32 id, uint64 replyBy) internal pure returns (Message memory m) {
+    function _cfp(uint64 replyBy) internal pure returns (Message memory m) {
         m.performative = uint8(Performative.Cfp);
         m.protocol = uint8(Protocol.FipaContractNet);
-        m.conversationId = id;
-        m.replyWith = keccak256(abi.encodePacked(id, "rw"));
+        m.conversationId = bytes32(0);
+        m.replyWith = keccak256("cn-rw");
         m.replyBy = replyBy;
-        m.content = hex"0b1d";
+    }
+
+    function _open(address[] memory peers, uint64 by)
+        internal
+        returns (bytes32 id, Message memory cfp)
+    {
+        cfp = _cfp(by);
+        id = manager.cfp(peers, cfp);
+        cfp.conversationId = id;
     }
 
     function _out(Message memory inbound, Performative act)
@@ -84,16 +92,16 @@ contract ContractNetChainSecurityTest is Test {
 
     // --- Ordering of proposals ---
 
-    /// @dev The Core FSM is order-independent: the same set of responses in any order yields the
-    /// same manager state. (Selection among proposals is application policy, not Core.)
+    /// @dev The FSM is order-independent: the same set of responses in any order yields the
+    /// same manager state. (Selection among proposals is application policy, not BLADE.)
     function testFuzz_order_responsesCommute(uint256 seed) public {
-        bytes32 idA = keccak256("ord-a");
-        bytes32 idB = keccak256("ord-b");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfpA = _cfp(idA, by);
-        Message memory cfpB = _cfp(idB, by);
-        manager.cfp(_all(), cfpA);
-        manager.cfp(_all(), cfpB);
+        Message memory cfpA = _cfp(by);
+        Message memory cfpB = _cfp(by);
+        bytes32 idA = manager.cfp(_all(), cfpA);
+        cfpA.conversationId = idA;
+        bytes32 idB = manager.cfp(_all(), cfpB);
+        cfpB.conversationId = idB;
 
         Performative[3] memory acts;
         for (uint256 i = 0; i < 3; i++) {
@@ -120,10 +128,9 @@ contract ContractNetChainSecurityTest is Test {
     // --- Deadline boundary ---
 
     function testFuzz_deadline_proposalTimelyIffNotAfterReplyBy(uint16 delta, bool after_) public {
-        bytes32 id = keccak256("dl-fuzz");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(ps[0])), cfp);
+        (bytes32 id, Message memory cfp) =
+            _open(_one(address(ps[0])), uint64(block.timestamp + WINDOW));
         uint256 t = after_ ? uint256(by) + 1 + uint256(delta) : uint256(by) - (delta % WINDOW);
         vm.warp(t);
         ps[0].respond(cfp, address(manager), _out(cfp, Performative.Propose));
@@ -141,10 +148,8 @@ contract ContractNetChainSecurityTest is Test {
     /// evaluation can run, never both: block-internal ordering cannot slip a proposal past an
     /// evaluation or evaluate before a timely proposal lands.
     function testFuzz_deadline_timelyProposalAndEvaluationMutuallyExclusive(uint16 offset) public {
-        bytes32 id = keccak256("dl-excl");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_all(), cfp);
+        (bytes32 id, Message memory cfp) = _open(_all(), uint64(block.timestamp + WINDOW));
         ps[1].respond(cfp, address(manager), _out(cfp, Performative.Propose));
         uint256 t = uint256(by) - WINDOW + 1 + (uint256(offset) % (2 * WINDOW));
         vm.warp(t);
@@ -166,7 +171,7 @@ contract ContractNetChainSecurityTest is Test {
     /// @dev Validator timestamp choice. With a drift bound D (chain-specific), a proposal whose
     /// honest inclusion time t satisfies |t - replyBy| > D has the same outcome for every
     /// timestamp in [t - D, t + D]; only proposals inside the D-window around the deadline can be
-    /// flipped. The Core cannot prevent such flips; applications choose deadline margins.
+    /// flipped. BLADE cannot prevent such flips; applications choose deadline margins.
     function testFuzz_timestamp_manipulationOnlyAffectsDriftWindow(uint16 rawT, uint8 rawD) public {
         uint64 by = uint64(block.timestamp + WINDOW);
         uint256 d = uint256(rawD) % 31;
@@ -175,9 +180,9 @@ contract ContractNetChainSecurityTest is Test {
         uint256[3] memory times = [t - d, t, t + d];
         for (uint256 k = 0; k < 3; k++) {
             uint256 snap = vm.snapshotState();
-            bytes32 id = keccak256("ts-manip");
-            Message memory cfp = _cfp(id, by);
-            manager.cfp(_one(address(ps[0])), cfp);
+            Message memory cfp = _cfp(by);
+            bytes32 id = manager.cfp(_one(address(ps[0])), cfp);
+            cfp.conversationId = id;
             vm.warp(times[k]);
             ps[0].respond(cfp, address(manager), _out(cfp, Performative.Propose));
             outcome[k] = manager.slotOf(id, address(ps[0])) == ContractNetLib.SLOT_PROPOSED;
@@ -193,10 +198,9 @@ contract ContractNetChainSecurityTest is Test {
     }
 
     function test_timestamp_boundaryFlipByOneSecond() public {
-        bytes32 id = keccak256("ts-flip");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(ps[0])), cfp);
+        (bytes32 id, Message memory cfp) =
+            _open(_one(address(ps[0])), uint64(block.timestamp + WINDOW));
         uint256 snap = vm.snapshotState();
         vm.warp(by);
         ps[0].respond(cfp, address(manager), _out(cfp, Performative.Propose));
@@ -210,10 +214,8 @@ contract ContractNetChainSecurityTest is Test {
     // --- Evaluation not executed after the deadline ---
 
     function test_noEvaluate_lateProposalsKeepBeingRejected() public {
-        bytes32 id = keccak256("ne-late");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_all(), cfp);
+        (bytes32 id, Message memory cfp) = _open(_all(), uint64(block.timestamp + WINDOW));
         ps[0].respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 30 days);
         ps[1].respond(cfp, address(manager), _out(cfp, Performative.Propose));
@@ -230,10 +232,8 @@ contract ContractNetChainSecurityTest is Test {
     /// @dev `_evaluate` is caller-agnostic by design. A permissive wrapper lets any account pick
     /// the winners; authorization is an application obligation.
     function test_thirdParty_permissiveWrapperLetsAnyonePickWinners() public {
-        bytes32 id = keccak256("tp-open");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_all(), cfp);
+        (bytes32 id, Message memory cfp) = _open(_all(), uint64(block.timestamp + WINDOW));
         ps[0].respond(cfp, address(manager), _out(cfp, Performative.Propose));
         ps[1].respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -244,13 +244,13 @@ contract ContractNetChainSecurityTest is Test {
 
     function test_thirdParty_gatedWrapperRejectsThirdParty() public {
         OwnerGatedContractNetManager gated = new OwnerGatedContractNetManager();
-        bytes32 id = keccak256("tp-gated");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfp = _cfp(id, by);
+        Message memory cfp = _cfp(by);
         vm.prank(address(0xBAD));
         vm.expectRevert(OwnerGatedContractNetManager.NotOwner.selector);
         gated.cfp(_one(address(ps[0])), cfp);
-        gated.cfp(_one(address(ps[0])), cfp);
+        bytes32 id = gated.cfp(_one(address(ps[0])), cfp);
+        cfp.conversationId = id;
         ps[0].respond(cfp, address(gated), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         vm.prank(address(0xBAD));
@@ -263,10 +263,8 @@ contract ContractNetChainSecurityTest is Test {
 
     function testFuzz_thirdParty_cannotActForParticipants(address caller, uint8 act) public {
         vm.assume(caller != address(ps[0]) && caller != address(ps[1]) && caller != address(ps[2]));
-        bytes32 id = keccak256("tp-impersonate");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_all(), cfp);
+        (bytes32 id, Message memory cfp) = _open(_all(), uint64(block.timestamp + WINDOW));
         ps[0].respond(cfp, address(manager), _out(cfp, Performative.Propose));
         bytes32 before = _pack(id);
         vm.prank(caller);
@@ -278,10 +276,8 @@ contract ContractNetChainSecurityTest is Test {
     // --- Completed conversations ---
 
     function test_completed_noActModifiesFinishedConversation() public {
-        bytes32 id = keccak256("done");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_all(), cfp);
+        (bytes32 id, Message memory cfp) = _open(_all(), uint64(block.timestamp + WINDOW));
         ps[0].respond(cfp, address(manager), _out(cfp, Performative.Propose));
         ps[1].respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -321,13 +317,9 @@ contract ContractNetChainSecurityTest is Test {
     // --- Isolation between simultaneous conversations ---
 
     function testFuzz_isolation_actionsOnOneConversationLeaveOtherUntouched(uint256 seed) public {
-        bytes32 a = keccak256("iso-a");
-        bytes32 b = keccak256("iso-b");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfpA = _cfp(a, by);
-        Message memory cfpB = _cfp(b, by);
-        manager.cfp(_all(), cfpA);
-        manager.cfp(_all(), cfpB);
+        (bytes32 a, Message memory cfpA) = _open(_all(), uint64(block.timestamp + WINDOW));
+        (bytes32 b, Message memory cfpB) = _open(_all(), uint64(block.timestamp + WINDOW));
         ps[0].respond(cfpB, address(manager), _out(cfpB, Performative.Propose));
         bytes32 beforeB = _pack(b);
         for (uint256 step = 0; step < 12; step++) {
@@ -358,30 +350,30 @@ contract ContractNetChainSecurityTest is Test {
         }
     }
 
-    // --- Not protected by the Core (documented limitations) ---
+    // --- Not protected by BLADE (documented limitations) ---
 
-    /// @dev LIMITATION: participant sessions are keyed by `conversationId` only. A third contract
-    /// that learns a pending id can CFP the participant first; the honest CFP then reverts as a
-    /// whole. Mitigations are application-level (`_authorizeInbound`, unpredictable ids).
+    /// @dev BLADE-assigned ids prevent squatting a predictable `conversationId` on the manager.
+    /// A rival manager still gets its own id; the honest manager opens normally.
     function test_frontrun_cfpSquattingBlocksHonestManager() public {
         ExposedContractNetManager eve = new ExposedContractNetManager(address(0));
-        bytes32 id = keccak256("squat");
         uint64 by = uint64(block.timestamp + WINDOW);
-        eve.cfp(_one(address(ps[0])), _cfp(id, by));
-        vm.expectRevert(ContractNetLib.UnexpectedPeer.selector);
-        manager.cfp(_all(), _cfp(id, by));
-        assertEq(manager.conversation(id).live, 0);
-        assertEq(ps[1].session(id).phase, ContractNetLib.PART_NONE);
+        Message memory eveMsg = _cfp(by);
+        bytes32 eveId = eve.cfp(_one(address(ps[0])), eveMsg);
+        eveMsg.conversationId = eveId;
+        (bytes32 honestId,) = _open(_all(), by);
+        assertNotEq(honestId, eveId);
+        assertEq(manager.conversation(honestId).live, ps.length);
+        assertEq(ps[0].session(eveId).phase, ContractNetLib.PART_CFPED);
+        assertEq(ps[0].session(honestId).phase, ContractNetLib.PART_CFPED);
     }
 
     /// @dev LIMITATION: proposals are public. Content travels in calldata and in the `Received`
-    /// event; the Core implements no commit-reveal, so it does not prevent front-running or
+    /// event; BLADE implements no commit-reveal, so it does not prevent front-running or
     /// copying of proposals.
     function test_privacy_proposalContentIsPublic() public {
-        bytes32 id = keccak256("public");
         uint64 by = uint64(block.timestamp + WINDOW);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(ps[0])), cfp);
+        (bytes32 id, Message memory cfp) =
+            _open(_one(address(ps[0])), uint64(block.timestamp + WINDOW));
         Message memory prop = _out(cfp, Performative.Propose);
         prop.content = hex"5ec2e7";
         vm.expectEmit(true, true, false, true, address(manager));

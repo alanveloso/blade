@@ -68,7 +68,7 @@ contract RequestHandler is Test {
         calls++;
     }
 
-    /// @dev Legitimate transport peer delivers, bypassing its own Core, an act carrying a token
+    /// @dev Legitimate transport peer delivers, bypassing its own agent, an act carrying a token
     /// from a previous instance (any id). Only the initiator's correlation check can stop it.
     function staleTokenReply(uint8 idSel, uint8 actSel, uint16 tokSel) external {
         if (retired.length == 0) {
@@ -104,7 +104,7 @@ contract RequestHandler is Test {
         calls++;
     }
 
-    /// @dev Application hands the participant Core an inbound/outbound pair that is internally
+    /// @dev Application hands the participant an inbound/outbound pair that is internally
     /// consistent but does not match the stored session token.
     function forgedInboundRespond(uint8 idSel, uint8 actSel, bytes32 forged) external {
         bytes32 id = _id(idSel);

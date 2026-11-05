@@ -24,11 +24,13 @@ contract CompositeAgent is RequestAgent, ContractNetManager, ContractNetParticip
         _reply(inbound, to, outbound);
     }
 
-    function cfp(address[] calldata participants, Message memory message) external {
-        if (_cn[message.conversationId].phase != ContractNetLib.PART_NONE) {
-            revert ContractNetLib.InvalidTransition();
-        }
-        _cfp(participants, message);
+    /// @dev Pass `conversationId == 0`; BLADE assigns the id. Dual-role on the same id is
+    /// unreachable under generated ids unless this agent invites itself.
+    function cfp(address[] calldata participants, Message memory message)
+        external
+        returns (bytes32)
+    {
+        return _cfp(participants, message);
     }
 
     function evaluate(

@@ -14,7 +14,7 @@ contract CorrelationPolicyBytecodeProof is NetFixture {
     function check_uniquePolicyNeverReopens(bytes32 id) public {
         vm.assume(id != bytes32(0));
         AuditUniqueManager u = new AuditUniqueManager();
-        Message memory m = _cfp(id, uint64(block.timestamp + 100));
+        Message memory m = _cfpWithId(id, uint64(block.timestamp + 100));
         u.cfp(_one(address(p1)), m);
         p1.respond(m, address(u), _out(m, Performative.Refuse));
         (bool ok,) = address(u).call(abi.encodeCall(u.cfp, (_one(address(p1)), m)));
@@ -27,7 +27,7 @@ contract CorrelationPolicyBytecodeProof is NetFixture {
         AuditTokenManager t = new AuditTokenManager();
         AuditTokenParticipant p = new AuditTokenParticipant();
         bytes32 id = bytes32(uint256(1));
-        Message memory m = _cfp(id, uint64(block.timestamp + 100));
+        Message memory m = _cfpWithId(id, uint64(block.timestamp + 100));
         m.replyWith = bytes32(0);
         t.cfp(_one(address(p)), m);
         m.replyWith = t.token(id);
@@ -44,7 +44,7 @@ contract CorrelationPolicyBytecodeProof is NetFixture {
         AuditTokenManager t = new AuditTokenManager();
         AuditTokenParticipant p = new AuditTokenParticipant();
         bytes32 id = bytes32(uint256(1));
-        Message memory m = _cfp(id, uint64(block.timestamp + 100));
+        Message memory m = _cfpWithId(id, uint64(block.timestamp + 100));
         m.replyWith = bytes32(0);
         t.cfp(_one(address(p)), m);
         vm.assume(wrong != t.token(id));

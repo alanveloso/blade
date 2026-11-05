@@ -36,7 +36,8 @@ contract FinalRegressionTest is NetFixture {
     function test_contractNetRejectsLogicalOpeningBeforeStateChange() public {
         address relay = address(0xbeef);
         ExposedContractNetParticipant p = new ExposedContractNetParticipant(relay);
-        Message memory m = _cfp(ID, uint64(block.timestamp + 100));
+        Message memory m = _cfp(uint64(block.timestamp + 100));
+        m.conversationId = ID;
         m.logicalSender = bytes32(uint256(1));
         vm.prank(relay);
         vm.expectRevert(ContractNetLib.UnexpectedPeer.selector);
@@ -44,32 +45,33 @@ contract FinalRegressionTest is NetFixture {
         assertEq(p.session(ID).phase, ContractNetLib.PART_NONE);
     }
 
-    function queued() internal returns (QueuedContractNetManager q, Message memory m) {
+    function queued() internal returns (QueuedContractNetManager q, bytes32 id, Message memory m) {
         q = new QueuedContractNetManager();
-        m = _cfp(ID, uint64(block.timestamp + 100));
-        q.cfp(_one(address(p1)), m);
+        m = _cfp(uint64(block.timestamp + 100));
+        id = q.cfp(_one(address(p1)), m);
+        m.conversationId = id;
         p1.respond(m, address(q), _out(m, Performative.Propose));
         vm.warp(block.timestamp + 101);
-        q.evaluate(ID, _one(address(p1)), _empty(), _empty());
+        q.evaluate(id, _one(address(p1)), _empty(), _empty());
     }
 
     function test_withdrawalBeforeDeliveryClearsObsoleteDecision() public {
-        (QueuedContractNetManager q, Message memory m) = queued();
+        (QueuedContractNetManager q, bytes32 id, Message memory m) = queued();
         p1.respond(m, address(q), _out(m, Performative.NotUnderstood));
-        assertEq(q.pendingCount(ID), 0);
-        assertEq(q.pending(ID, address(p1)), 0);
-        assertEq(q.conversation(ID).live, 0);
-        m.replyBy = uint64(block.timestamp + 100);
-        q.cfp(_one(address(p1)), m);
-        assertEq(q.conversation(ID).live, 1);
+        assertEq(q.pendingCount(id), 0);
+        assertEq(q.pending(id, address(p1)), 0);
+        assertEq(q.conversation(id).live, 0);
+        m = _cfp(uint64(block.timestamp + 100));
+        bytes32 id2 = q.cfp(_one(address(p1)), m);
+        assertEq(q.conversation(id2).live, 1);
     }
 
     function test_completionBeforeDecisionDeliveryRejected() public {
-        (QueuedContractNetManager q, Message memory m) = queued();
+        (QueuedContractNetManager q, bytes32 id, Message memory m) = queued();
         vm.prank(address(p1));
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         q.handle(_out(m, Performative.Inform));
-        assertEq(q.pendingCount(ID), 1);
-        assertEq(q.conversation(ID).live, 1);
+        assertEq(q.pendingCount(id), 1);
+        assertEq(q.conversation(id).live, 1);
     }
 }

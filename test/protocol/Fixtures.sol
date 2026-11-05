@@ -18,12 +18,28 @@ abstract contract NetFixture is Test {
         vm.warp(1_700_000_000);
     }
 
-    function _cfp(bytes32 id, uint64 by) internal pure returns (Message memory m) {
+    /// @dev Opening template: `conversationId` must be zero; BLADE assigns on `cfp`.
+    function _cfp(uint64 by) internal pure returns (Message memory m) {
         m.protocol = uint8(Protocol.FipaContractNet);
         m.performative = uint8(Performative.Cfp);
-        m.conversationId = id;
         m.replyBy = by;
+        m.replyWith = keccak256("cn-rw");
+    }
+
+    /// @dev Legacy helper for audit comparators that still accept application-chosen ids.
+    function _cfpWithId(bytes32 id, uint64 by) internal pure returns (Message memory m) {
+        m = _cfp(by);
+        m.conversationId = id;
         m.replyWith = keccak256(abi.encodePacked(id, "rw"));
+    }
+
+    function _open(address[] memory peers, uint64 by)
+        internal
+        returns (bytes32 id, Message memory cfp)
+    {
+        cfp = _cfp(by);
+        id = manager.cfp(peers, cfp);
+        cfp.conversationId = id;
     }
 
     function _out(Message memory inbound, Performative act)
@@ -52,9 +68,8 @@ abstract contract NetFixture is Test {
         a[1] = q;
     }
 
-    function _proposeAll(bytes32 id, address[] memory peers) internal returns (Message memory cfp) {
-        cfp = _cfp(id, uint64(block.timestamp + 100));
-        manager.cfp(peers, cfp);
+    function _proposeAll(address[] memory peers) internal returns (bytes32 id, Message memory cfp) {
+        (id, cfp) = _open(peers, uint64(block.timestamp + 100));
         for (uint256 i; i < peers.length; ++i) {
             ExposedContractNetParticipant(peers[i])
                 .respond(cfp, address(manager), _out(cfp, Performative.Propose));

@@ -21,10 +21,10 @@ enum RequestRole {
 }
 
 /// @title On-chain implementation of the supported FIPA Request interaction subset.
-/// @dev Cancel is outside the current Core scope. Abstract: the leaf calls `Agent` once.
+/// @dev Cancel is outside the current BLADE scope. Abstract: the leaf calls `Agent` once.
 /// @dev Correlation: every act after the opening Request is bound to the session token
 /// (`replyWith` of that Request). Participant acts must carry it in `inReplyTo`; initiator
-/// continuations must keep it in `replyWith`. The initiator's Core assigns the token from a
+/// continuations must keep it in `replyWith`. The initiator's BLADE assigns the token from a
 /// monotonic nonce, so a reused `conversationId` never reuses a token.
 abstract contract RequestAgent is Agent {
     /// @dev Live session only. Terminal acts `delete` this entry; `Terminal` is not stored.
@@ -44,7 +44,7 @@ abstract contract RequestAgent is Agent {
     error UnexpectedPeer();
     error NotRequestPerformative();
     error MissingReplyWith();
-    error ReplyWithAssignedByCore();
+    error ReplyWithAssignedByBlade();
 
     event RequestAdvanced(bytes32 indexed conversationId, uint8 phase, uint8 performative);
 
@@ -64,7 +64,7 @@ abstract contract RequestAgent is Agent {
             revert InvalidTransition();
         }
         if (outbound.replyWith != bytes32(0)) {
-            revert ReplyWithAssignedByCore();
+            revert ReplyWithAssignedByBlade();
         }
         bytes32 token = keccak256(
             abi.encode(block.chainid, address(this), outbound.conversationId, ++_requestNonce)
@@ -125,7 +125,7 @@ abstract contract RequestAgent is Agent {
         if (s.phase == RequestPhase.None) {
             revert InvalidTransition();
         }
-        // The Core owns peer correlation in both directions. A continuation cannot be
+        // BLADE owns peer correlation in both directions. A continuation cannot be
         // redirected by application code to a transport peer different from the live session.
         if (s.logicalPeer == bytes32(0)) {
             if (to != s.transportPeer) {
