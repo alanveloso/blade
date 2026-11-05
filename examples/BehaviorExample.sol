@@ -39,7 +39,7 @@ contract IncrementBehaviorStrategy is IExternalApplicationStrategy {
 /// @dev Demonstrates product entry points only:
 ///      authorized Explicit / authenticated Message -> external strategy -> validated Application
 ///      Action -> trusted Agent-owned effect. It is not a scheduler and does not wake itself.
-/// @dev `behaviorAdmin` is example application policy, not a BLADE Core owner concept.
+/// @dev `behaviorAdmin` is example application policy, not a BLADE owner concept.
 contract ExampleBehaviorCounterAgent is ExplicitExecutorGate {
     address public immutable behaviorAdmin;
     address public immutable messageCaller;

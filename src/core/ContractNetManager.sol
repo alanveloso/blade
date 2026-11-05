@@ -20,10 +20,16 @@ abstract contract ContractNetManager is Agent {
 
     mapping(bytes32 conversationId => Conversation) internal _net;
     mapping(bytes32 conversationId => mapping(address participant => uint8 slot)) internal _slot;
+    /// @dev Monotonic counter for BLADE-assigned conversation ids (per manager instance).
+    uint256 private _conversationNonce;
 
     event ContractNetSlot(
         bytes32 indexed conversationId, address indexed participant, uint8 slot, uint8 performative
     );
+    /// @dev Emitted when the manager assigns a conversation id at CFP opening.
+    event ConversationOpened(bytes32 indexed conversationId);
+
+    error ConversationIdAssignedByBlade();
 
     function conversation(bytes32 conversationId) external view returns (Conversation memory) {
         return _net[conversationId];
@@ -33,15 +39,23 @@ abstract contract ContractNetManager is Agent {
         return _slot[conversationId][participant];
     }
 
-    /// @dev Explicit 1:N CFP. Same `conversationId` on every `handle`. Application decision primitive.
+    /// @dev Explicit 1:N CFP. BLADE assigns `conversationId`; callers must pass zero.
     /// Duplicate detection reuses the per-participant mapping instead of an O(N^2) array scan.
-    function _cfp(address[] calldata participants, Message memory message) internal {
+    /// @return conversationId The BLADE-assigned identifier written into `message`.
+    function _cfp(address[] calldata participants, Message memory message)
+        internal
+        returns (bytes32 conversationId)
+    {
+        conversationId = _openConversationId(message);
+        message.conversationId = conversationId;
         ContractNetLib.requireCfp(message);
         uint256 n = participants.length;
         if (n == 0) {
             revert ContractNetLib.EmptyParticipants();
         }
-        Conversation storage c = _net[message.conversationId];
+        Conversation storage c = _net[conversationId];
+        // BLADE-assigned ids make accidental reuse unreachable in the production path; the guard
+        // remains for experiment overrides that still accept application-chosen identifiers.
         if (c.invited != 0 || c.live != 0) {
             revert ContractNetLib.InvalidTransition();
         }
@@ -52,12 +66,12 @@ abstract contract ContractNetManager is Agent {
             if (p == address(0) || p.code.length == 0) {
                 revert ContractNetLib.InvalidParticipant(p);
             }
-            if (_slot[message.conversationId][p] != ContractNetLib.SLOT_NONE) {
+            if (_slot[conversationId][p] != ContractNetLib.SLOT_NONE) {
                 revert ContractNetLib.DuplicateParticipant();
             }
-            _slot[message.conversationId][p] = ContractNetLib.SLOT_INVITED;
+            _slot[conversationId][p] = ContractNetLib.SLOT_INVITED;
             emit ContractNetSlot(
-                message.conversationId, p, ContractNetLib.SLOT_INVITED, uint8(Performative.Cfp)
+                conversationId, p, ContractNetLib.SLOT_INVITED, uint8(Performative.Cfp)
             );
         }
 
@@ -65,10 +79,20 @@ abstract contract ContractNetManager is Agent {
         c.evaluated = false;
         c.live = uint32(n);
         c.invited = uint32(n);
+        emit ConversationOpened(conversationId);
 
         for (uint256 i = 0; i < n; i++) {
             _send(participants[i], message);
         }
+    }
+
+    /// @dev Production policy: reject non-zero external ids; assign `keccak256(chainId, this, ++nonce)`.
+    /// Audit comparators may override to study alternate correlation policies.
+    function _openConversationId(Message memory message) internal virtual returns (bytes32 id) {
+        if (message.conversationId != bytes32(0)) {
+            revert ConversationIdAssignedByBlade();
+        }
+        id = keccak256(abi.encode(block.chainid, address(this), ++_conversationNonce));
     }
 
     /// @dev Tx-triggered finalization after `replyBy`. CEI: all checks/effects, then participant `handle`s.

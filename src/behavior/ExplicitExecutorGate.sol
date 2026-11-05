@@ -5,7 +5,7 @@ import {BehaviorRuntime} from "./BehaviorRuntime.sol";
 
 /// @title Opt-in authorized exposure of Explicit extra-tx triggers.
 /// @dev Not a waker. Not a scheduler. Does not change `BehaviorRuntime` (Explicit stays internal there).
-/// @dev `explicitExecutor` is application/leaf authority, not `trustedRelay` and not a Core owner.
+/// @dev `explicitExecutor` is application/leaf authority, not `trustedRelay` and not a BLADE owner.
 ///      `address(0)` denies every caller. Redeploy (or a later specialization) to change the executor.
 /// @dev The executor chooses *when* to provoke a step, not `stepGas`. Budget is `_behaviorStepGas()`.
 /// @dev Authorization uses `msg.sender` only, never `tx.origin`.

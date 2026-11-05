@@ -2,6 +2,7 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {ContractNetLib} from "../src/core/ContractNetLib.sol";
+import {ContractNetManager} from "../src/core/ContractNetManager.sol";
 import {IAgent} from "../src/core/IAgent.sol";
 import {Message} from "../src/core/Message.sol";
 import {Performative} from "../src/core/Performative.sol";
@@ -48,13 +49,22 @@ contract ContractNetRobustnessTest is Test {
         vm.warp(1_700_000_000);
     }
 
-    function _cfp(bytes32 id, uint64 replyBy) internal pure returns (Message memory m) {
+    function _cfp(uint64 replyBy) internal pure returns (Message memory m) {
         m.performative = uint8(Performative.Cfp);
         m.protocol = uint8(Protocol.FipaContractNet);
-        m.conversationId = id;
-        m.replyWith = keccak256(abi.encodePacked(id, "rw"));
+        m.conversationId = bytes32(0);
+        m.replyWith = keccak256("cn-rw");
         m.replyBy = replyBy;
         m.content = UNIQUE;
+    }
+
+    function _open(address[] memory peers, uint64 by)
+        internal
+        returns (bytes32 id, Message memory cfp)
+    {
+        cfp = _cfp(by);
+        id = manager.cfp(peers, cfp);
+        cfp.conversationId = id;
     }
 
     function _out(Message memory inbound, Performative act)
@@ -73,10 +83,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_managerDecisionDoesNotReuseCfpReplyBy() public {
-        bytes32 id = keccak256("decision-replyby-zero");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(recorder)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(recorder)), _deadline());
         recorder.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         manager.evaluate(id, _one(address(recorder)), _empty(), _empty());
@@ -85,10 +93,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_lateProposalRejectionDoesNotReuseCfpReplyBy() public {
-        bytes32 id = keccak256("late-reject-replyby-zero");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(recorder)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(recorder)), _deadline());
         vm.warp(uint256(by) + 1);
         recorder.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         assertEq(recorder.lastDecision(), uint8(Performative.RejectProposal));
@@ -127,10 +133,8 @@ contract ContractNetRobustnessTest is Test {
     // --- M30 regression ---
 
     function test_evaluateAcceptImmediateInform() public {
-        bytes32 id = keccak256("m30-inform");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(autoInform)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(autoInform)), _deadline());
         autoInform.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         manager.evaluate(id, _one(address(autoInform)), _empty(), _empty());
@@ -141,10 +145,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateAcceptImmediateFailure() public {
-        bytes32 id = keccak256("m30-fail");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(autoFail)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(autoFail)), _deadline());
         autoFail.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         manager.evaluate(id, _one(address(autoFail)), _empty(), _empty());
@@ -153,10 +155,9 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateOneImmediateInformOtherRemainsAccepted() public {
-        bytes32 id = keccak256("m30-mixed");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_two(address(autoInform), address(p1)), cfp);
+        (bytes32 id, Message memory cfp) =
+            _open(_two(address(autoInform), address(p1)), _deadline());
         autoInform.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -171,10 +172,9 @@ contract ContractNetRobustnessTest is Test {
 
     function test_evaluateAllAcceptedCompleteSynchronously() public {
         AutoCompleteParticipant a2 = new AutoCompleteParticipant(uint8(Performative.Inform));
-        bytes32 id = keccak256("m30-all");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_two(address(autoInform), address(a2)), cfp);
+        (bytes32 id, Message memory cfp) =
+            _open(_two(address(autoInform), address(a2)), _deadline());
         autoInform.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         a2.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -185,14 +185,12 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateMixedAcceptRejectSilentWithSyncComplete() public {
-        bytes32 id = keccak256("m30-ars");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
         address[] memory parts = new address[](3);
         parts[0] = address(autoInform);
         parts[1] = address(p1);
         parts[2] = address(p2);
-        manager.cfp(parts, cfp);
+        (bytes32 id, Message memory cfp) = _open(parts, by);
         autoInform.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -204,13 +202,9 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateSyncCompleteDoesNotCorruptOtherConversation() public {
-        bytes32 keep = keccak256("keep");
-        bytes32 drop = keccak256("drop");
         uint64 by = _deadline();
-        Message memory cfpKeep = _cfp(keep, by);
-        Message memory cfpDrop = _cfp(drop, by);
-        manager.cfp(_one(address(p1)), cfpKeep);
-        manager.cfp(_one(address(autoInform)), cfpDrop);
+        (bytes32 keep, Message memory cfpKeep) = _open(_one(address(p1)), by);
+        (bytes32 drop, Message memory cfpDrop) = _open(_one(address(autoInform)), by);
         p1.respond(cfpKeep, address(manager), _out(cfpKeep, Performative.Propose));
         autoInform.respond(cfpDrop, address(manager), _out(cfpDrop, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -225,10 +219,8 @@ contract ContractNetRobustnessTest is Test {
     // --- Deadline ---
 
     function test_deadlineLtReplyByProposeOkEvaluateReverts() public {
-        bytes32 id = keccak256("dl-lt");
         uint64 by = uint64(block.timestamp + 50);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), uint64(block.timestamp + 50));
         vm.warp(uint256(by) - 1);
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_PROPOSED);
@@ -237,10 +229,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_deadlineEqReplyByProposeOkEvaluateReverts() public {
-        bytes32 id = keccak256("dl-eq");
         uint64 by = uint64(block.timestamp + 50);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), uint64(block.timestamp + 50));
         vm.warp(uint256(by));
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_PROPOSED);
@@ -249,10 +239,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_deadlineGtReplyByProposeLateEvaluateOk() public {
-        bytes32 id = keccak256("dl-gt");
         uint64 by = uint64(block.timestamp + 50);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), uint64(block.timestamp + 50));
         vm.warp(uint256(by) + 1);
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_NONE);
@@ -263,10 +251,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_deadlineGtReplyByEvaluateAfterTimelyPropose() public {
-        bytes32 id = keccak256("dl-eval");
         uint64 by = uint64(block.timestamp + 50);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), uint64(block.timestamp + 50));
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         manager.evaluate(id, _one(address(p1)), _empty(), _empty());
@@ -277,62 +263,50 @@ contract ContractNetRobustnessTest is Test {
 
     function test_cfpEmptyParticipantsReverts() public {
         vm.expectRevert(ContractNetLib.EmptyParticipants.selector);
-        manager.cfp(_empty(), _cfp(keccak256("empty"), _deadline()));
+        manager.cfp(_empty(), _cfp(_deadline()));
     }
 
     function test_cfpDuplicateParticipantsReverts() public {
         vm.expectRevert(ContractNetLib.DuplicateParticipant.selector);
-        manager.cfp(_two(address(p1), address(p1)), _cfp(keccak256("dup"), _deadline()));
+        manager.cfp(_two(address(p1), address(p1)), _cfp(_deadline()));
     }
 
     function test_cfpAddressZeroRevertsEntireTransaction() public {
-        bytes32 id = keccak256("zero");
         vm.expectRevert(
             abi.encodeWithSelector(ContractNetLib.InvalidParticipant.selector, address(0))
         );
-        manager.cfp(_one(address(0)), _cfp(id, _deadline()));
-        _assertNetGone(id);
+        manager.cfp(_one(address(0)), _cfp(_deadline()));
     }
 
     function test_cfpEoaRevertsEntireTransaction() public {
         address eoa = address(0xBEEF);
-        bytes32 id = keccak256("eoa");
         vm.expectRevert(abi.encodeWithSelector(ContractNetLib.InvalidParticipant.selector, eoa));
-        manager.cfp(_one(eoa), _cfp(id, _deadline()));
-        _assertNetGone(id);
-        assertEq(manager.slotOf(id, eoa), ContractNetLib.SLOT_NONE);
+        manager.cfp(_one(eoa), _cfp(_deadline()));
+        assertEq(manager.slotOf(bytes32(0), eoa), ContractNetLib.SLOT_NONE);
     }
 
     function test_cfpInvalidAmongValidRevertsNoPartialState() public {
-        bytes32 id = keccak256("mix-inv");
         address eoa = address(0xBEEF);
         vm.expectRevert(abi.encodeWithSelector(ContractNetLib.InvalidParticipant.selector, eoa));
-        manager.cfp(_two(address(p1), eoa), _cfp(id, _deadline()));
-        _assertNetGone(id);
-        assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_NONE);
-        assertEq(p1.session(id).phase, ContractNetLib.PART_NONE);
+        manager.cfp(_two(address(p1), eoa), _cfp(_deadline()));
+        assertEq(p1.session(bytes32(0)).phase, ContractNetLib.PART_NONE);
     }
 
     function test_cfpDeployedParticipantOk() public {
-        bytes32 id = keccak256("ok-p");
-        manager.cfp(_one(address(p1)), _cfp(id, _deadline()));
+        (bytes32 id,) = _open(_one(address(p1)), _deadline());
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_INVITED);
         assertEq(p1.session(id).phase, ContractNetLib.PART_CFPED);
     }
 
     function test_cfpManagerInParticipantListReverts() public {
-        bytes32 id = keccak256("m4");
-        Message memory cfp = _cfp(id, _deadline());
+        Message memory cfp = _cfp(_deadline());
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         manager.cfp(_one(address(manager)), cfp);
-        _assertNetGone(id);
     }
 
     function test_cfpReplyByMaxNeverLateEvaluateReverts() public {
-        bytes32 id = keccak256("m7");
         uint64 by = type(uint64).max;
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), type(uint64).max);
         vm.warp(uint256(type(uint64).max));
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_PROPOSED);
@@ -341,10 +315,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_alreadyExpiredCfpAllowsLateProposeReject() public {
-        bytes32 id = keccak256("m8");
         uint64 by = uint64(block.timestamp - 1);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), uint64(block.timestamp - 1));
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_NONE);
         assertEq(p1.session(id).phase, ContractNetLib.PART_NONE);
@@ -352,10 +324,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_acceptProposalWithoutProposeReverts() public {
-        bytes32 id = keccak256("p4");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         Message memory acc;
         acc.performative = uint8(Performative.AcceptProposal);
         acc.protocol = uint8(Protocol.FipaContractNet);
@@ -369,9 +339,7 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_outOfEnumPerformativeOnCnReverts() public {
-        bytes32 id = keccak256("a10-cn");
-        Message memory cfp = _cfp(id, _deadline());
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         Message memory bad = _out(cfp, Performative.Propose);
         bad.performative = 255;
         vm.prank(address(p1));
@@ -381,49 +349,59 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_cfpSameIdWhileActiveReverts() public {
-        bytes32 id = keccak256("again");
-        Message memory cfp = _cfp(id, _deadline());
+        (bytes32 id1,) = _open(_one(address(p1)), _deadline());
+        (bytes32 id2,) = _open(_one(address(p2)), _deadline());
+        assertNotEq(id1, id2);
+        assertEq(manager.conversation(id1).live, 1);
+        assertEq(manager.conversation(id2).live, 1);
+    }
+
+    function test_nonZeroOpeningConversationIdReverts() public {
+        Message memory cfp = _cfp(_deadline());
+        cfp.conversationId = keccak256("forced-id");
+        vm.expectRevert(ContractNetManager.ConversationIdAssignedByBlade.selector);
         manager.cfp(_one(address(p1)), cfp);
-        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
-        manager.cfp(_one(address(p2)), cfp);
     }
 
     function test_cfpAtomicRevertLeavesNoState() public {
-        bytes32 id = keccak256("atomic");
-        Message memory cfp = _cfp(id, _deadline());
+        Message memory cfp = _cfp(_deadline());
         vm.expectRevert(bytes("cfp-handle-revert"));
         manager.cfp(_two(address(p1), address(revertCfp)), cfp);
-        _assertNetGone(id);
-        assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_NONE);
-        assertEq(p1.session(id).phase, ContractNetLib.PART_NONE);
+        assertEq(p1.session(cfp.conversationId).phase, ContractNetLib.PART_NONE);
+        (bytes32 okId,) = _open(_one(address(p1)), _deadline());
+        assertEq(p1.session(okId).phase, ContractNetLib.PART_CFPED);
     }
 
     function test_cfpPublicCallerCurrentlyAllowed() public {
-        bytes32 id = keccak256("pub-cfp");
         vm.prank(address(0x1111));
-        manager.cfp(_one(address(p1)), _cfp(id, _deadline()));
+        (bytes32 id,) = _open(_one(address(p1)), _deadline());
         assertEq(manager.conversation(id).live, 1);
     }
 
     function test_reuseConversationIdAfterCleanup() public {
-        bytes32 id = keccak256("reuse");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), by);
         p1.respond(cfp, address(manager), _out(cfp, Performative.Refuse));
         _assertNetGone(id);
-        manager.cfp(_one(address(p2)), cfp);
-        assertEq(manager.conversation(id).live, 1);
-        assertEq(manager.slotOf(id, address(p2)), ContractNetLib.SLOT_INVITED);
+        Message memory reopen = _cfp(by);
+        bytes32 id2 = manager.cfp(_one(address(p2)), reopen);
+        reopen.conversationId = id2;
+        assertNotEq(id2, id);
+        assertEq(manager.conversation(id2).live, 1);
+        assertEq(manager.slotOf(id2, address(p2)), ContractNetLib.SLOT_INVITED);
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_NONE);
+        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
+        p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
+        Message memory forced = _cfp(by);
+        forced.conversationId = id;
+        vm.expectRevert(ContractNetManager.ConversationIdAssignedByBlade.selector);
+        manager.cfp(_one(address(p2)), forced);
     }
 
     // --- Response negatives ---
 
     function test_proposeThenRefuseReverts() public {
-        bytes32 id = keccak256("pr");
-        Message memory cfp = _cfp(id, _deadline());
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         p1.respond(cfp, address(manager), _out(cfp, Performative.Refuse));
@@ -431,9 +409,7 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_refuseThenProposeReverts() public {
-        bytes32 id = keccak256("rp");
-        Message memory cfp = _cfp(id, _deadline());
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Refuse));
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
@@ -441,12 +417,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_responseOnWrongConversationDoesNotMutateOther() public {
-        bytes32 a = keccak256("ca");
-        bytes32 b = keccak256("cb");
-        Message memory cfpA = _cfp(a, _deadline());
-        Message memory cfpB = _cfp(b, _deadline());
-        manager.cfp(_one(address(p1)), cfpA);
-        manager.cfp(_one(address(p2)), cfpB);
+        (bytes32 a, Message memory cfpA) = _open(_one(address(p1)), _deadline());
+        (bytes32 b, Message memory cfpB) = _open(_one(address(p2)), _deadline());
         vm.prank(address(p1));
         vm.expectRevert(ContractNetLib.UnexpectedPeer.selector);
         manager.handle(_out(cfpB, Performative.Propose));
@@ -455,22 +427,16 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_sameParticipantTwoConversations() public {
-        bytes32 a = keccak256("p8a");
-        bytes32 b = keccak256("p8b");
-        Message memory cfpA = _cfp(a, _deadline());
-        Message memory cfpB = _cfp(b, _deadline());
-        manager.cfp(_one(address(p1)), cfpA);
-        manager.cfp(_one(address(p1)), cfpB);
+        (bytes32 a, Message memory cfpA) = _open(_one(address(p1)), _deadline());
+        (bytes32 b, Message memory cfpB) = _open(_one(address(p1)), _deadline());
         p1.respond(cfpA, address(manager), _out(cfpA, Performative.Propose));
         assertEq(p1.session(a).phase, ContractNetLib.PART_PROPOSED);
         assertEq(p1.session(b).phase, ContractNetLib.PART_CFPED);
     }
 
     function test_rejectProposalWhileOnlyCfpedRevertsPreservesSession() public {
-        bytes32 id = keccak256("p5");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         Message memory rej;
         rej.performative = uint8(Performative.RejectProposal);
         rej.protocol = uint8(Protocol.FipaContractNet);
@@ -484,9 +450,7 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_duplicateCfpOnActiveParticipantReverts() public {
-        bytes32 id = keccak256("p2");
-        Message memory cfp = _cfp(id, _deadline());
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         vm.prank(address(p2));
         vm.expectRevert(ContractNetLib.UnexpectedPeer.selector);
         p1.handle(cfp);
@@ -494,9 +458,7 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_respondPublicCallerCurrentlyAllowed() public {
-        bytes32 id = keccak256("pub-r");
-        Message memory cfp = _cfp(id, _deadline());
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         vm.prank(address(0x2222));
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_PROPOSED);
@@ -505,10 +467,8 @@ contract ContractNetRobustnessTest is Test {
     // --- Evaluate negatives ---
 
     function test_evaluateDuplicateInAcceptReverts() public {
-        bytes32 id = keccak256("dup-a");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         vm.expectRevert(ContractNetLib.IncompleteEvaluation.selector);
@@ -517,10 +477,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateDuplicateInRejectReverts() public {
-        bytes32 id = keccak256("dup-r");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_two(address(p1), address(p2)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_two(address(p1), address(p2)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         p2.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -531,10 +489,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateDuplicateInSilentReverts() public {
-        bytes32 id = keccak256("dup-s");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         vm.warp(uint256(by) + 1);
         vm.expectRevert(ContractNetLib.IncompleteEvaluation.selector);
         manager.evaluate(id, _empty(), _empty(), _two(address(p1), address(p1)));
@@ -542,10 +498,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateOverlapAcceptRejectReverts() public {
-        bytes32 id = keccak256("ov");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_two(address(p1), address(p2)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_two(address(p1), address(p2)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         p2.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -555,10 +509,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateUnknownParticipantReverts() public {
-        bytes32 id = keccak256("unk");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
@@ -568,10 +520,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateOmitProposedReverts() public {
-        bytes32 id = keccak256("omit");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_two(address(p1), address(p2)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_two(address(p1), address(p2)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         p2.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -582,10 +532,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateTwiceReverts() public {
-        bytes32 id = keccak256("twice");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         manager.evaluate(id, _one(address(p1)), _empty(), _empty());
@@ -595,10 +543,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluatePublicCallerCurrentlyAllowed() public {
-        bytes32 id = keccak256("pub-e");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         vm.prank(address(0x3333));
@@ -611,10 +557,8 @@ contract ContractNetRobustnessTest is Test {
     /// @dev Participant-side guard only: the act is rejected by the reentrant participant's own
     /// FSM and never reaches the manager. Manager-side reentry is covered by `test_reentry_*`.
     function test_maliciousReentrantProposeOnAcceptRevertsEvaluate() public {
-        bytes32 id = keccak256("mal");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(malicious)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(malicious)), _deadline());
         malicious.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
@@ -623,7 +567,7 @@ contract ContractNetRobustnessTest is Test {
         assertFalse(manager.conversation(id).evaluated);
     }
 
-    // --- Direct manager reentry (protocol review): the adversary bypasses its own FSM ---
+    // --- Direct manager reentry: the adversary bypasses its own FSM ---
 
     function _cnAct(bytes32 id, Performative act) internal view returns (Message memory m) {
         m.performative = uint8(act);
@@ -638,20 +582,19 @@ contract ContractNetRobustnessTest is Test {
         return abi.encodeCall(IAgent.handle, (m));
     }
 
-    function _openProposed(DirectReentrantParticipant adv, bytes32 id)
+    function _openProposed(DirectReentrantParticipant adv)
         internal
-        returns (uint64 by)
+        returns (bytes32 id, uint64 by)
     {
         by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(adv)), cfp);
+        Message memory cfp;
+        (id, cfp) = _open(_one(address(adv)), by);
         adv.respond(cfp, address(manager), _out(cfp, Performative.Propose));
     }
 
     function test_reentry_directProposeReachesManagerAndIsRejected() public {
         DirectReentrantParticipant adv = new DirectReentrantParticipant();
-        bytes32 id = keccak256("re-direct");
-        uint64 by = _openProposed(adv, id);
+        (bytes32 id, uint64 by) = _openProposed(adv);
         Message memory m = _cnAct(id, Performative.Propose);
         adv.arm(uint8(Performative.AcceptProposal), address(manager), _handleCall(m), false);
         vm.warp(uint256(by) + 1);
@@ -677,8 +620,7 @@ contract ContractNetRobustnessTest is Test {
 
     function test_reentry_directProposeBubbledRollsBackEvaluate() public {
         DirectReentrantParticipant adv = new DirectReentrantParticipant();
-        bytes32 id = keccak256("re-bubble");
-        uint64 by = _openProposed(adv, id);
+        (bytes32 id, uint64 by) = _openProposed(adv);
         adv.arm(
             uint8(Performative.AcceptProposal),
             address(manager),
@@ -707,8 +649,7 @@ contract ContractNetRobustnessTest is Test {
         ];
         for (uint256 i = 0; i < acts.length; i++) {
             DirectReentrantParticipant adv = new DirectReentrantParticipant();
-            bytes32 id = keccak256(abi.encode("re-matrix", i));
-            uint64 by = _openProposed(adv, id);
+            (bytes32 id, uint64 by) = _openProposed(adv);
             Message memory m = _cnAct(id, acts[i]);
             adv.arm(uint8(Performative.AcceptProposal), address(manager), _handleCall(m), false);
             vm.warp(uint256(by) + 1);
@@ -733,10 +674,8 @@ contract ContractNetRobustnessTest is Test {
         for (uint256 i = 0; i < acts.length; i++) {
             DirectReentrantParticipant adv = new DirectReentrantParticipant();
             ExposedContractNetParticipant honest = new ExposedContractNetParticipant(address(0));
-            bytes32 id = keccak256(abi.encode("re-complete", i));
             uint64 by = _deadline();
-            Message memory cfp = _cfp(id, by);
-            manager.cfp(_two(address(adv), address(honest)), cfp);
+            (bytes32 id, Message memory cfp) = _open(_two(address(adv), address(honest)), by);
             adv.respond(cfp, address(manager), _out(cfp, Performative.Propose));
             honest.respond(cfp, address(manager), _out(cfp, Performative.Propose));
             adv.arm(
@@ -759,8 +698,7 @@ contract ContractNetRobustnessTest is Test {
 
     function test_reentry_evaluateSameConversationRejected() public {
         DirectReentrantParticipant adv = new DirectReentrantParticipant();
-        bytes32 id = keccak256("re-eval");
-        uint64 by = _openProposed(adv, id);
+        (bytes32 id, uint64 by) = _openProposed(adv);
         bytes memory call_ = abi.encodeCall(
             ExposedContractNetManager.evaluate, (id, _one(address(adv)), _empty(), _empty())
         );
@@ -777,57 +715,48 @@ contract ContractNetRobustnessTest is Test {
 
     function test_reentry_cfpSameLiveConversationRejected() public {
         DirectReentrantParticipant adv = new DirectReentrantParticipant();
-        bytes32 id = keccak256("re-cfp-live");
-        uint64 by = _openProposed(adv, id);
+        (bytes32 id, uint64 by) = _openProposed(adv);
         bytes memory call_ =
-            abi.encodeCall(ExposedContractNetManager.cfp, (_one(address(p2)), _cfp(id, by + 100)));
+            abi.encodeCall(ExposedContractNetManager.cfp, (_one(address(p2)), _cfp(by + 100)));
         adv.arm(uint8(Performative.AcceptProposal), address(manager), call_, false);
         vm.warp(uint256(by) + 1);
         manager.evaluate(id, _one(address(adv)), _empty(), _empty());
-        assertEq(
-            adv.reentryReturnData(),
-            abi.encodeWithSelector(ContractNetLib.InvalidTransition.selector)
-        );
-        assertEq(manager.slotOf(id, address(p2)), ContractNetLib.SLOT_NONE);
-        assertEq(p2.session(id).phase, ContractNetLib.PART_NONE);
+        assertTrue(adv.reentrySucceeded());
+        bytes32 reentryId = keccak256(abi.encode(block.chainid, address(manager), uint256(2)));
+        assertNotEq(reentryId, id);
+        assertEq(manager.conversation(id).live, 1);
+        assertEq(manager.slotOf(reentryId, address(p2)), ContractNetLib.SLOT_INVITED);
+        assertEq(p2.session(reentryId).phase, ContractNetLib.PART_CFPED);
     }
 
-    /// @dev All-reject evaluation clears the conversation before delivering decisions; a rejected
-    /// adversary reopening the same id from inside the callback yields a fresh, consistent
-    /// conversation (the wrapper's `cfp` is permissive by application choice).
+    /// @dev All-reject evaluation clears the conversation before delivering decisions; a reentrant
+    /// CFP during reject opens a fresh BLADE-assigned id (not the cleared instance).
     function test_reentry_cfpSameIdAfterSynchronousClearIsConsistent() public {
         DirectReentrantParticipant adv = new DirectReentrantParticipant();
-        bytes32 id = keccak256("re-cfp-clear");
-        uint64 by = _openProposed(adv, id);
+        (bytes32 id, uint64 by) = _openProposed(adv);
         uint64 by2 = by + 1000;
         bytes memory call_ =
-            abi.encodeCall(ExposedContractNetManager.cfp, (_one(address(p2)), _cfp(id, by2)));
+            abi.encodeCall(ExposedContractNetManager.cfp, (_one(address(p2)), _cfp(by2)));
         adv.arm(uint8(Performative.RejectProposal), address(manager), call_, false);
         vm.warp(uint256(by) + 1);
         manager.evaluate(id, _empty(), _one(address(adv)), _empty());
         assertTrue(adv.reentrySucceeded());
-        assertEq(manager.slotOf(id, address(adv)), ContractNetLib.SLOT_NONE);
-        assertEq(manager.slotOf(id, address(p2)), ContractNetLib.SLOT_INVITED);
-        assertEq(manager.conversation(id).live, 1);
-        assertEq(manager.conversation(id).invited, 1);
-        assertFalse(manager.conversation(id).evaluated);
-        assertEq(manager.conversation(id).replyBy, by2);
-        assertEq(adv.session(id).phase, ContractNetLib.PART_NONE);
+        assertEq(manager.conversation(id).live, 0);
+        bytes32 reentryId = keccak256(abi.encode(block.chainid, address(manager), uint256(2)));
+        assertEq(manager.slotOf(reentryId, address(p2)), ContractNetLib.SLOT_INVITED);
+        assertEq(p2.session(reentryId).phase, ContractNetLib.PART_CFPED);
+        assertEq(manager.conversation(reentryId).replyBy, by2);
     }
 
     function test_reentry_otherConversations() public {
         DirectReentrantParticipant adv = new DirectReentrantParticipant();
-        bytes32 a = keccak256("re-other-a");
-        bytes32 b = keccak256("re-other-b");
-        bytes32 c = keccak256("re-other-c");
-        uint64 by = _openProposed(adv, a);
-        manager.cfp(_one(address(adv)), _cfp(b, by + 1000));
-        manager.cfp(_one(address(p1)), _cfp(c, by + 1000));
+        (bytes32 a, uint64 by) = _openProposed(adv);
+        (bytes32 b,) = _open(_one(address(adv)), by + 1000);
+        (bytes32 c,) = _open(_one(address(p1)), by + 1000);
         bytes32 cBefore = keccak256(
             abi.encode(manager.conversation(c), manager.slotOf(c, address(p1)), p1.session(c))
         );
 
-        // Not a member of `c`: rejected by the manager, `c` untouched.
         adv.arm(
             uint8(Performative.AcceptProposal),
             address(manager),
@@ -848,13 +777,9 @@ contract ContractNetRobustnessTest is Test {
         assertEq(manager.slotOf(a, address(adv)), ContractNetLib.SLOT_ACCEPTED);
         assertEq(manager.slotOf(b, address(adv)), ContractNetLib.SLOT_INVITED);
 
-        // Member of `b` (window still open): a reentrant Propose is a legitimate act on `b` and
-        // must not disturb `a`.
         DirectReentrantParticipant adv2 = new DirectReentrantParticipant();
-        bytes32 a2 = keccak256("re-other-a2");
-        bytes32 b2 = keccak256("re-other-b2");
-        uint64 byA2 = _openProposed(adv2, a2);
-        manager.cfp(_one(address(adv2)), _cfp(b2, byA2 + 1000));
+        (bytes32 a2, uint64 byA2) = _openProposed(adv2);
+        (bytes32 b2,) = _open(_one(address(adv2)), byA2 + 1000);
         adv2.arm(
             uint8(Performative.AcceptProposal),
             address(manager),
@@ -873,10 +798,8 @@ contract ContractNetRobustnessTest is Test {
 
     function testFuzz_reentry_anyActKeepsManagerConsistent(uint8 act) public {
         DirectReentrantParticipant adv = new DirectReentrantParticipant();
-        bytes32 id = keccak256("re-fuzz");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_two(address(adv), address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_two(address(adv), address(p1)), _deadline());
         adv.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         Message memory m;
@@ -899,10 +822,9 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_acceptHandleRevertRollsBackEvaluate() public {
-        bytes32 id = keccak256("rb");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_two(address(p1), address(revertAccept)), cfp);
+        (bytes32 id, Message memory cfp) =
+            _open(_two(address(p1), address(revertAccept)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         revertAccept.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -915,13 +837,9 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_maliciousRevertDoesNotCorruptOtherConversation() public {
-        bytes32 keep = keccak256("keep2");
-        bytes32 bad = keccak256("bad");
         uint64 by = _deadline();
-        Message memory cfpKeep = _cfp(keep, by);
-        Message memory cfpBad = _cfp(bad, by);
-        manager.cfp(_one(address(p1)), cfpKeep);
-        manager.cfp(_one(address(revertAccept)), cfpBad);
+        (bytes32 keep, Message memory cfpKeep) = _open(_one(address(p1)), by);
+        (bytes32 bad, Message memory cfpBad) = _open(_one(address(revertAccept)), by);
         p1.respond(cfpKeep, address(manager), _out(cfpKeep, Performative.Propose));
         revertAccept.respond(cfpBad, address(manager), _out(cfpBad, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -932,10 +850,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_evaluateRefusedAddressRevertsWithoutMutatingSibling() public {
-        bytes32 id = keccak256("m24");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_two(address(p1), address(p2)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_two(address(p1), address(p2)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Refuse));
         p2.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -949,7 +865,7 @@ contract ContractNetRobustnessTest is Test {
     function test_bareManagerDecisionSelectorsAbsent() public {
         BareContractNetManager bare = new BareContractNetManager(address(0));
         address[] memory parts = _one(address(p1));
-        Message memory m = _cfp(keccak256("bare"), _deadline());
+        Message memory m = _cfp(_deadline());
         (bool okCfp,) = address(bare)
             .call(
                 abi.encodeWithSignature(
@@ -975,7 +891,7 @@ contract ContractNetRobustnessTest is Test {
 
     function test_bareParticipantRespondSelectorAbsent() public {
         BareContractNetParticipant bare = new BareContractNetParticipant(address(0));
-        Message memory m = _cfp(keccak256("bare-p"), _deadline());
+        Message memory m = _cfp(_deadline());
         (bool ok,) = address(bare)
             .call(
                 abi.encodeWithSignature(
@@ -989,10 +905,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_expireCfpedBeforeAndAtReplyByReverts() public {
-        bytes32 id = keccak256("ex-early");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         p1.expire(id);
         vm.warp(uint256(by));
@@ -1002,10 +916,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_expireCfpedAfterReplyByDeletes() public {
-        bytes32 id = keccak256("ex-ok");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         vm.warp(uint256(by) + 1);
         vm.prank(address(0x9999));
         p1.expire(id);
@@ -1014,10 +926,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_expireProposedAfterDeadlineReverts() public {
-        bytes32 id = keccak256("ex-pr");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
@@ -1026,10 +936,8 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_expireAcceptedReverts() public {
-        bytes32 id = keccak256("ex-ac");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         manager.evaluate(id, _one(address(p1)), _empty(), _empty());
@@ -1039,11 +947,9 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_expireDoesNotAffectOtherConversation() public {
-        bytes32 a = keccak256("ex-a");
-        bytes32 b = keccak256("ex-b");
         uint64 by = _deadline();
-        manager.cfp(_one(address(p1)), _cfp(a, by));
-        manager.cfp(_one(address(p1)), _cfp(b, by));
+        (bytes32 a,) = _open(_one(address(p1)), by);
+        (bytes32 b,) = _open(_one(address(p1)), by);
         vm.warp(uint256(by) + 1);
         p1.expire(a);
         assertEq(p1.session(a).phase, ContractNetLib.PART_NONE);
@@ -1051,24 +957,22 @@ contract ContractNetRobustnessTest is Test {
     }
 
     function test_reuseAfterExpireNoTombstone() public {
-        bytes32 id = keccak256("ex-re");
         uint64 by = _deadline();
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(_one(address(p1)), cfp);
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), _deadline());
         vm.warp(uint256(by) + 1);
         p1.expire(id);
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         p1.expire(id);
         manager.evaluate(id, _empty(), _empty(), _one(address(p1)));
         _assertNetGone(id);
-        manager.cfp(_one(address(p1)), _cfp(id, uint64(block.timestamp + 50)));
-        assertEq(p1.session(id).phase, ContractNetLib.PART_CFPED);
+        (bytes32 id2,) = _open(_one(address(p1)), uint64(block.timestamp + 50));
+        assertNotEq(id2, id);
+        assertEq(p1.session(id2).phase, ContractNetLib.PART_CFPED);
     }
 
     function test_snapshot_expire() public {
-        bytes32 id = keccak256("sx");
         uint64 by = _deadline();
-        manager.cfp(_one(address(p1)), _cfp(id, by));
+        (bytes32 id, Message memory cfp) = _open(_one(address(p1)), by);
         vm.warp(uint256(by) + 1);
         p1.expire(id);
     }

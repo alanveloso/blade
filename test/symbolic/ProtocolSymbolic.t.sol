@@ -124,30 +124,30 @@ contract SubscribeBytecodeProof is Test {
 }
 
 contract ContractNetBytecodeProof is NetFixture {
-    bytes32 constant ID = bytes32(uint256(1));
+    bytes32 internal openedId;
 
     function setUp() public override {
         super.setUp();
-        manager.cfp(_one(address(p1)), _cfp(ID, uint64(block.timestamp + 100)));
+        (openedId,) = _open(_one(address(p1)), uint64(block.timestamp + 100));
     }
 
     function check_proposerAuthorization(address caller) public {
         Message memory m;
         m.protocol = uint8(Protocol.FipaContractNet);
         m.performative = uint8(Performative.Propose);
-        m.conversationId = ID;
+        m.conversationId = openedId;
         vm.prank(caller);
         (bool ok,) = address(manager).call(abi.encodeCall(manager.handle, (m)));
         assert(ok == (caller == address(p1)));
-        assert(manager.conversation(ID).live == 1);
+        assert(manager.conversation(openedId).live == 1);
         assert(
-            manager.slotOf(ID, address(p1))
+            manager.slotOf(openedId, address(p1))
                 == (ok ? ContractNetLib.SLOT_PROPOSED : ContractNetLib.SLOT_INVITED)
         );
     }
 
     function check_uninvitedConversationIsolated(bytes32 id) public {
-        vm.assume(id != ID);
+        vm.assume(id != openedId);
         Message memory m;
         m.protocol = uint8(Protocol.FipaContractNet);
         m.performative = uint8(Performative.Propose);
@@ -155,24 +155,25 @@ contract ContractNetBytecodeProof is NetFixture {
         vm.prank(address(p1));
         (bool ok,) = address(manager).call(abi.encodeCall(manager.handle, (m)));
         assert(!ok);
-        assert(manager.conversation(ID).live == 1);
-        assert(manager.slotOf(ID, address(p1)) == ContractNetLib.SLOT_INVITED);
+        assert(manager.conversation(openedId).live == 1);
+        assert(manager.slotOf(openedId, address(p1)) == ContractNetLib.SLOT_INVITED);
     }
 }
 
 contract QueueBytecodeProof is NetFixture {
     QueuedContractNetManager q;
     Message opening;
-    bytes32 constant ID = bytes32(uint256(11));
+    bytes32 internal openedId;
 
     function setUp() public override {
         super.setUp();
         q = new QueuedContractNetManager();
-        opening = _cfp(ID, uint64(block.timestamp + 100));
-        q.cfp(_one(address(p1)), opening);
+        opening = _cfp(uint64(block.timestamp + 100));
+        openedId = q.cfp(_one(address(p1)), opening);
+        opening.conversationId = openedId;
         p1.respond(opening, address(q), _out(opening, Performative.Propose));
         vm.warp(block.timestamp + 101);
-        q.evaluate(ID, _one(address(p1)), _empty(), _empty());
+        q.evaluate(openedId, _one(address(p1)), _empty(), _empty());
     }
 
     function check_earlyCompletionRejected(bool failure) public {
@@ -180,22 +181,22 @@ contract QueueBytecodeProof is NetFixture {
         vm.prank(address(p1));
         (bool ok,) = address(q).call(abi.encodeCall(q.handle, (m)));
         assert(!ok);
-        assert(q.pendingCount(ID) == 1);
-        assert(q.conversation(ID).live == 1);
+        assert(q.pendingCount(openedId) == 1);
+        assert(q.conversation(openedId).live == 1);
     }
 
     function check_withdrawalCleansQueue() public {
         p1.respond(opening, address(q), _out(opening, Performative.NotUnderstood));
-        assert(q.pendingCount(ID) == 0);
-        assert(q.pending(ID, address(p1)) == 0);
-        assert(q.conversation(ID).live == 0);
+        assert(q.pendingCount(openedId) == 0);
+        assert(q.pending(openedId, address(p1)) == 0);
+        assert(q.conversation(openedId).live == 0);
     }
 
     function check_wrongDeliveryTarget(address peer) public {
         vm.assume(peer != address(p1));
-        (bool ok,) = address(q).call(abi.encodeCall(q.deliver, (ID, peer)));
+        (bool ok,) = address(q).call(abi.encodeCall(q.deliver, (openedId, peer)));
         assert(!ok);
-        assert(q.pendingCount(ID) == 1);
-        assert(q.conversation(ID).live == 1);
+        assert(q.pendingCount(openedId) == 1);
+        assert(q.conversation(openedId).live == 1);
     }
 }

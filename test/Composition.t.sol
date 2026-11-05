@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {CompositeAgent} from "../examples/CompositeExample.sol";
 import {ContractNetLib} from "../src/core/ContractNetLib.sol";
+import {ContractNetManager} from "../src/core/ContractNetManager.sol";
 import {IAgent} from "../src/core/IAgent.sol";
 import {Message} from "../src/core/Message.sol";
 import {Performative} from "../src/core/Performative.sol";
@@ -30,17 +31,26 @@ contract CompositionTest is Test {
         m.conversationId = id;
     }
 
-    /// @dev Request as delivered: carries the token the initiator's Core assigned.
+    /// @dev Request as delivered: carries the token the initiator assigned.
     function _sent(bytes32 id, RequestAgent initiator) internal view returns (Message memory m) {
         m = _req(id);
         m.replyWith = initiator.requestStatus(id).replyWith;
     }
 
-    function _cfp(bytes32 id, uint64 by) internal pure returns (Message memory m) {
+    function _cfp(uint64 by) internal pure returns (Message memory m) {
         m.performative = uint8(Performative.Cfp);
         m.protocol = uint8(Protocol.FipaContractNet);
-        m.conversationId = id;
+        m.conversationId = bytes32(0);
         m.replyBy = by;
+    }
+
+    function _openCn(address[] memory peers, uint64 by)
+        internal
+        returns (bytes32 id, Message memory cfp)
+    {
+        cfp = _cfp(by);
+        id = self.cfp(peers, cfp);
+        cfp.conversationId = id;
     }
 
     function _out(Message memory inbound, Performative act)
@@ -81,10 +91,8 @@ contract CompositionTest is Test {
     }
 
     function test_contractNetManager() public {
-        bytes32 id = keccak256("comp-m");
         uint64 by = uint64(block.timestamp + 10);
-        Message memory cfp = _cfp(id, by);
-        self.cfp(_one(address(cnPeer)), cfp);
+        (bytes32 id, Message memory cfp) = _openCn(_one(address(cnPeer)), by);
         cnPeer.respond(cfp, address(self), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
         self.evaluate(id, _one(address(cnPeer)), _none(), _none());
@@ -98,10 +106,10 @@ contract CompositionTest is Test {
     }
 
     function test_contractNetParticipant() public {
-        bytes32 id = keccak256("comp-p");
         uint64 by = uint64(block.timestamp + 10);
-        Message memory cfp = _cfp(id, by);
-        otherManager.cfp(_one(address(self)), cfp);
+        Message memory cfp = _cfp(by);
+        bytes32 id = otherManager.cfp(_one(address(self)), cfp);
+        cfp.conversationId = id;
         assertEq(self.session(id).phase, ContractNetLib.PART_CFPED);
         self.respond(cfp, address(otherManager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -117,11 +125,9 @@ contract CompositionTest is Test {
 
     function test_requestAndContractNetConcurrent() public {
         bytes32 reqId = keccak256("live-req");
-        bytes32 cnId = keccak256("live-cn");
         self.startRequest(address(reqPeer), _req(reqId));
         uint64 by = uint64(block.timestamp + 10);
-        Message memory cfp = _cfp(cnId, by);
-        self.cfp(_one(address(cnPeer)), cfp);
+        (bytes32 cnId, Message memory cfp) = _openCn(_one(address(cnPeer)), by);
         assertEq(uint8(self.requestStatus(reqId).phase), uint8(RequestPhase.Requested));
         assertEq(self.conversation(cnId).live, 1);
         Message memory req = _sent(reqId, self);
@@ -134,13 +140,11 @@ contract CompositionTest is Test {
     }
 
     function test_managerAndParticipantDifferentConversations() public {
-        bytes32 asMgr = keccak256("as-mgr");
-        bytes32 asPart = keccak256("as-part");
         uint64 by = uint64(block.timestamp + 10);
-        Message memory cfpM = _cfp(asMgr, by);
-        Message memory cfpP = _cfp(asPart, by);
-        self.cfp(_one(address(cnPeer)), cfpM);
-        otherManager.cfp(_one(address(self)), cfpP);
+        (bytes32 asMgr, Message memory cfpM) = _openCn(_one(address(cnPeer)), by);
+        Message memory cfpP = _cfp(by);
+        bytes32 asPart = otherManager.cfp(_one(address(self)), cfpP);
+        cfpP.conversationId = asPart;
         cnPeer.respond(cfpM, address(self), _out(cfpM, Performative.Propose));
         self.respond(cfpP, address(otherManager), _out(cfpP, Performative.Propose));
         assertEq(self.slotOf(asMgr, address(cnPeer)), ContractNetLib.SLOT_PROPOSED);
@@ -162,21 +166,21 @@ contract CompositionTest is Test {
         assertEq(self.session(asPart).phase, ContractNetLib.PART_NONE);
     }
 
-    /// @dev Request and CN use independent mappings; the same conversationId is supported across protocols.
+    /// @dev Request and CN use independent mappings; Request keeps app-chosen ids, CN uses BLADE-assigned ids.
     function test_sameConversationIdAcrossRequestAndContractNet() public {
-        bytes32 id = keccak256("shared-cid");
-        self.startRequest(address(reqPeer), _req(id));
+        bytes32 reqId = keccak256("shared-cid");
+        self.startRequest(address(reqPeer), _req(reqId));
         uint64 by = uint64(block.timestamp + 10);
-        Message memory cfp = _cfp(id, by);
-        self.cfp(_one(address(cnPeer)), cfp);
-        assertEq(uint8(self.requestStatus(id).phase), uint8(RequestPhase.Requested));
-        assertEq(self.conversation(id).live, 1);
-        Message memory req = _sent(id, self);
+        (bytes32 cnId, Message memory cfp) = _openCn(_one(address(cnPeer)), by);
+        assertNotEq(cnId, reqId);
+        assertEq(uint8(self.requestStatus(reqId).phase), uint8(RequestPhase.Requested));
+        assertEq(self.conversation(cnId).live, 1);
+        Message memory req = _sent(reqId, self);
         reqPeer.respond(req, address(self), _out(req, Performative.Inform));
-        assertEq(uint8(self.requestStatus(id).phase), uint8(RequestPhase.None));
-        assertEq(self.conversation(id).live, 1);
+        assertEq(uint8(self.requestStatus(reqId).phase), uint8(RequestPhase.None));
+        assertEq(self.conversation(cnId).live, 1);
         cnPeer.respond(cfp, address(self), _out(cfp, Performative.Refuse));
-        assertEq(self.conversation(id).live, 0);
+        assertEq(self.conversation(cnId).live, 0);
     }
 
     function test_invalidRequestTransition() public {
@@ -194,30 +198,28 @@ contract CompositionTest is Test {
     }
 
     function test_invalidParticipantTransition() public {
-        bytes32 id = keccak256("bad-part");
-        Message memory cfp = _cfp(id, uint64(block.timestamp + 10));
+        Message memory cfp = _cfp(uint64(block.timestamp + 10));
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         self.respond(cfp, address(otherManager), _out(cfp, Performative.Propose));
     }
 
-    function test_sameCnIdManagerThenParticipantCfpReverts() public {
-        bytes32 id = keccak256("cn-overlap");
+    /// @dev BLADE-assigned ids make manager/participant dual-role on the *same* id unreachable
+    /// across independent openings; both roles can be live under distinct generated ids.
+    function test_managerThenParticipantOpeningsUseDistinctIds() public {
         uint64 by = uint64(block.timestamp + 10);
-        self.cfp(_one(address(cnPeer)), _cfp(id, by));
-        vm.expectRevert(ContractNetLib.UnexpectedPeer.selector);
-        otherManager.cfp(_one(address(self)), _cfp(id, by));
-        assertEq(self.conversation(id).live, 1);
-        assertEq(self.session(id).phase, ContractNetLib.PART_NONE);
+        (bytes32 mgrId,) = _openCn(_one(address(cnPeer)), by);
+        Message memory cfpP = _cfp(by);
+        bytes32 partId = otherManager.cfp(_one(address(self)), cfpP);
+        assertNotEq(mgrId, partId);
+        assertEq(self.conversation(mgrId).live, 1);
+        assertEq(self.session(partId).phase, ContractNetLib.PART_CFPED);
     }
 
-    function test_sameCnIdParticipantThenManagerCfpReverts() public {
-        bytes32 id = keccak256("cn-overlap-2");
-        uint64 by = uint64(block.timestamp + 10);
-        otherManager.cfp(_one(address(self)), _cfp(id, by));
-        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
-        self.cfp(_one(address(cnPeer)), _cfp(id, by));
-        assertEq(self.session(id).phase, ContractNetLib.PART_CFPED);
-        assertEq(self.conversation(id).live, 0);
+    function test_nonZeroOpeningIdRejectedByBlade() public {
+        Message memory forced = _cfp(uint64(block.timestamp + 10));
+        forced.conversationId = keccak256("forced");
+        vm.expectRevert(ContractNetManager.ConversationIdAssignedByBlade.selector);
+        self.cfp(_one(address(cnPeer)), forced);
     }
 
     function test_malformedContractNetWithoutSessionReverts() public {

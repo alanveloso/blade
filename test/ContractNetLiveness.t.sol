@@ -29,12 +29,21 @@ contract ContractNetLivenessTest is Test {
         vm.warp(1_700_000_000);
     }
 
-    function _cfp(bytes32 id, uint64 replyBy) internal pure returns (Message memory m) {
+    function _cfp(uint64 replyBy) internal pure returns (Message memory m) {
         m.performative = uint8(Performative.Cfp);
         m.protocol = uint8(Protocol.FipaContractNet);
-        m.conversationId = id;
-        m.replyWith = keccak256(abi.encodePacked(id, "rw"));
+        m.conversationId = bytes32(0);
+        m.replyWith = keccak256("cn-rw");
         m.replyBy = replyBy;
+    }
+
+    function _open(address[] memory peers, uint64 by)
+        internal
+        returns (bytes32 id, Message memory cfp)
+    {
+        cfp = _cfp(by);
+        id = manager.cfp(peers, cfp);
+        cfp.conversationId = id;
     }
 
     function _out(Message memory inbound, Performative act)
@@ -76,11 +85,10 @@ contract ContractNetLivenessTest is Test {
         }
     }
 
-    /// @dev Opens `id` with `parts`, has each of them propose, and closes the window.
-    function _proposeAll(bytes32 id, address[] memory parts) internal returns (Message memory cfp) {
+    /// @dev Opens with `parts`, has each propose, and closes the window.
+    function _proposeAll(address[] memory parts) internal returns (bytes32 id, Message memory cfp) {
         uint64 by = uint64(block.timestamp + 100);
-        cfp = _cfp(id, by);
-        manager.cfp(parts, cfp);
+        (id, cfp) = _open(parts, by);
         for (uint256 i = 0; i < parts.length; i++) {
             ExposedContractNetParticipant(parts[i])
                 .respond(cfp, address(manager), _out(cfp, Performative.Propose));
@@ -92,9 +100,8 @@ contract ContractNetLivenessTest is Test {
 
     function test_live_revertOnAcceptBlocksEvaluateForAll() public {
         RevertOnAcceptParticipant bad = new RevertOnAcceptParticipant();
-        bytes32 id = keccak256("lv-revert-accept");
         address[] memory parts = _two(address(p1), address(bad));
-        _proposeAll(id, parts);
+        (bytes32 id,) = _proposeAll(parts);
         bytes32 before = _pack(id, parts);
         vm.expectRevert(bytes("accept-handle-revert"));
         manager.evaluate(id, parts, _empty(), _empty());
@@ -104,8 +111,7 @@ contract ContractNetLivenessTest is Test {
     /// @dev Existing recovery path: the manager can route the griefer to `reject`.
     function test_live_revertOnAcceptRecoverableByRejecting() public {
         RevertOnAcceptParticipant bad = new RevertOnAcceptParticipant();
-        bytes32 id = keccak256("lv-revert-accept-recover");
-        _proposeAll(id, _two(address(p1), address(bad)));
+        (bytes32 id,) = _proposeAll(_two(address(p1), address(bad)));
         vm.expectRevert(bytes("accept-handle-revert"));
         manager.evaluate(id, _one(address(bad)), _one(address(p1)), _empty());
         manager.evaluate(id, _one(address(p1)), _one(address(bad)), _empty());
@@ -118,9 +124,8 @@ contract ContractNetLivenessTest is Test {
     /// partition revert; the manager conversation can never be evaluated or cleared.
     function test_live_revertOnEveryDecisionStallsConversation() public {
         RevertOnDecisionParticipant bad = new RevertOnDecisionParticipant();
-        bytes32 id = keccak256("lv-stall");
         address[] memory parts = _two(address(p1), address(bad));
-        Message memory cfp = _proposeAll(id, parts);
+        (bytes32 id, Message memory cfp) = _proposeAll(parts);
         bytes32 before = _pack(id, parts);
 
         vm.expectRevert(bytes("decision-revert"));
@@ -135,9 +140,10 @@ contract ContractNetLivenessTest is Test {
         manager.evaluate(id, _one(address(p1)), _empty(), _empty());
         assertEq(_pack(id, parts), before);
 
-        // The id cannot be reused while the stalled conversation is live.
-        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
-        manager.cfp(_one(address(p2)), _cfp(id, uint64(block.timestamp + 100)));
+        // BLADE assigns a fresh id; a new opening does not collide with the stalled instance.
+        (bytes32 id2,) = _open(_one(address(p2)), uint64(block.timestamp + 100));
+        assertNotEq(id2, id);
+        assertEq(manager.conversation(id2).live, 1);
 
         // The honest participant cannot `expire` a PROPOSED session, but it can withdraw with
         // not-understood, which the manager accepts from any slot.
@@ -160,9 +166,8 @@ contract ContractNetLivenessTest is Test {
     /// the failure propagates; no gas limit lets the evaluation through.
     function test_live_unboundedGasBurnerBlocksEvaluate() public {
         GasBurnerParticipant burner = new GasBurnerParticipant(0);
-        bytes32 id = keccak256("lv-burn-unbounded");
         address[] memory parts = _two(address(p1), address(burner));
-        _proposeAll(id, parts);
+        (bytes32 id,) = _proposeAll(parts);
         bytes32 before = _pack(id, parts);
         uint256[2] memory limits = [uint256(2_000_000), uint256(25_000_000)];
         for (uint256 i = 0; i < limits.length; i++) {
@@ -184,9 +189,8 @@ contract ContractNetLivenessTest is Test {
         GasBurnerParticipant burner = new GasBurnerParticipant(30_000);
         AutoCompleteParticipant a1 = new AutoCompleteParticipant(uint8(Performative.Inform));
         AutoCompleteParticipant a2 = new AutoCompleteParticipant(uint8(Performative.Inform));
-        bytes32 id = keccak256("lv-burn-bounded");
         address[] memory parts = _three(address(burner), address(a1), address(a2));
-        _proposeAll(id, parts);
+        (bytes32 id,) = _proposeAll(parts);
         bytes32 before = _pack(id, parts);
         bytes memory call_ = abi.encodeCall(manager.evaluate, (id, parts, _empty(), _empty()));
 
@@ -210,13 +214,13 @@ contract ContractNetLivenessTest is Test {
     function test_live_batchedEvaluationRevertsAllConversations() public {
         BatchingContractNetManager batch = new BatchingContractNetManager();
         RevertOnAcceptParticipant bad = new RevertOnAcceptParticipant();
-        bytes32 a = keccak256("lv-batch-a");
-        bytes32 b = keccak256("lv-batch-b");
         uint64 by = uint64(block.timestamp + 100);
-        Message memory cfpA = _cfp(a, by);
-        Message memory cfpB = _cfp(b, by);
-        batch.cfp(_one(address(p1)), cfpA);
-        batch.cfp(_one(address(bad)), cfpB);
+        Message memory cfpA = _cfp(by);
+        Message memory cfpB = _cfp(by);
+        bytes32 a = batch.cfp(_one(address(p1)), cfpA);
+        cfpA.conversationId = a;
+        bytes32 b = batch.cfp(_one(address(bad)), cfpB);
+        cfpB.conversationId = b;
         p1.respond(cfpA, address(batch), _out(cfpA, Performative.Propose));
         bad.respond(cfpB, address(batch), _out(cfpB, Performative.Propose));
         vm.warp(uint256(by) + 1);
@@ -235,11 +239,9 @@ contract ContractNetLivenessTest is Test {
 
     function test_live_participantGriefingInOneConversationDoesNotBlockAnother() public {
         RevertOnDecisionParticipant bad = new RevertOnDecisionParticipant();
-        bytes32 a = keccak256("lv-iso-a");
-        bytes32 b = keccak256("lv-iso-b");
-        _proposeAll(a, _two(address(p1), address(bad)));
-        Message memory cfpB = _cfp(b, uint64(block.timestamp + 100));
-        manager.cfp(_two(address(p1), address(p2)), cfpB);
+        (bytes32 a,) = _proposeAll(_two(address(p1), address(bad)));
+        (bytes32 b, Message memory cfpB) =
+            _open(_two(address(p1), address(p2)), uint64(block.timestamp + 100));
         p1.respond(cfpB, address(manager), _out(cfpB, Performative.Propose));
         p2.respond(cfpB, address(manager), _out(cfpB, Performative.Propose));
         vm.warp(block.timestamp + 101);
@@ -253,11 +255,9 @@ contract ContractNetLivenessTest is Test {
     // --- Abandoned sessions ---
 
     function test_live_managerNeverEvaluates() public {
-        bytes32 id = keccak256("lv-abandon-mgr");
         address[] memory parts = _two(address(p1), address(p2));
         uint64 by = uint64(block.timestamp + 100);
-        Message memory cfp = _cfp(id, by);
-        manager.cfp(parts, cfp);
+        (bytes32 id, Message memory cfp) = _open(parts, by);
         p1.respond(cfp, address(manager), _out(cfp, Performative.Propose));
         vm.warp(uint256(by) + 365 days);
 
@@ -281,15 +281,14 @@ contract ContractNetLivenessTest is Test {
 
     /// @dev LIMITATION: the manager has no timeout for ACCEPTED participants that never report.
     function test_live_acceptedParticipantNeverReports() public {
-        bytes32 id = keccak256("lv-abandon-acc");
-        _proposeAll(id, _one(address(p1)));
+        (bytes32 id,) = _proposeAll(_one(address(p1)));
         manager.evaluate(id, _one(address(p1)), _empty(), _empty());
         vm.warp(block.timestamp + 365 days);
         assertEq(manager.conversation(id).live, 1);
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         manager.evaluate(id, _empty(), _empty(), _empty());
-        vm.expectRevert(ContractNetLib.InvalidTransition.selector);
-        manager.cfp(_one(address(p2)), _cfp(id, uint64(block.timestamp + 10)));
+        (bytes32 id2,) = _open(_one(address(p2)), uint64(block.timestamp + 10));
+        assertNotEq(id2, id);
         vm.expectRevert(ContractNetLib.InvalidTransition.selector);
         p1.expire(id);
         assertEq(manager.slotOf(id, address(p1)), ContractNetLib.SLOT_ACCEPTED);

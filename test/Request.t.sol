@@ -33,7 +33,7 @@ contract RequestTest is Test {
         bob = new ScriptedRequestAgent(address(relaySink));
     }
 
-    /// @dev Outbound Request as the application builds it: `replyWith` is assigned by the Core.
+    /// @dev Outbound Request as the application builds it: `replyWith` is assigned by BLADE.
     function _requestAt(bytes32 conversationId) internal pure returns (Message memory m) {
         m.performative = uint8(Performative.Request);
         m.protocol = uint8(Protocol.FipaRequest);
@@ -51,7 +51,7 @@ contract RequestTest is Test {
         m.replyWith = keccak256("rw");
     }
 
-    /// @dev alice -> bob Request; returns the message as delivered (with the Core-assigned token).
+    /// @dev alice -> bob Request; returns the message as delivered (with the BLADE-assigned token).
     function _open(Message memory req) internal returns (Message memory) {
         alice.startRequest(address(bob), req);
         req.replyWith = alice.requestStatus(req.conversationId).replyWith;
@@ -257,8 +257,8 @@ contract RequestTest is Test {
         );
     }
 
-    /// @dev Revised for the protocol review: reuse of a `conversationId` after cleanup is still
-    /// allowed, but the new instance gets a fresh Core-assigned token and the previous instance's
+    /// @dev Reuse of a `conversationId` after cleanup is still
+    /// allowed, but the new instance gets a fresh BLADE-assigned token and the previous instance's
     /// replies no longer correlate with it.
     function test_reuseConversationIdAfterCleanup() public {
         Message memory first = _open(_request());
@@ -403,9 +403,9 @@ contract RequestTest is Test {
         _assertCleared(bob, req.conversationId);
     }
 
-    // --- Correlation (protocol review, reviewer 3) ---
+    // --- Correlation ---
 
-    function test_corr_tokenAssignedByCoreAndDeliveredToPeer() public {
+    function test_corr_tokenAssignedByBladeAndDeliveredToPeer() public {
         Message memory req = _request();
         alice.startRequest(address(bob), req);
         bytes32 aliceToken = alice.requestStatus(req.conversationId).replyWith;
@@ -426,7 +426,7 @@ contract RequestTest is Test {
         _assertCleared(alice, req.conversationId);
     }
 
-    /// @dev Raw delivery from the authorized transport peer: the participant's Core is bypassed,
+    /// @dev Raw delivery from the authorized transport peer: the participant is bypassed,
     /// so the only check exercised is the initiator's inbound correlation.
     function test_corr_wrongInReplyToRejectedAtInitiator() public {
         Message memory req = _open(_request());
@@ -448,7 +448,7 @@ contract RequestTest is Test {
         bob.handle(req);
     }
 
-    /// @dev The application hands the participant Core a forged `inbound` that agrees with the
+    /// @dev The application hands the participant a forged `inbound` that agrees with the
     /// wrong `inReplyTo`, so `Agent._reply`'s inbound check passes; the session check must fire.
     function test_corr_wrongInReplyToRejectedAtParticipantOutbound() public {
         (Message memory req, Agent sink) = _openFromSink();
@@ -496,7 +496,7 @@ contract RequestTest is Test {
     function test_corr_applicationChosenTokenRejected() public {
         Message memory req = _request();
         req.replyWith = keccak256("app-token");
-        vm.expectRevert(RequestAgent.ReplyWithAssignedByCore.selector);
+        vm.expectRevert(RequestAgent.ReplyWithAssignedByBlade.selector);
         alice.startRequest(address(bob), req);
         _assertCleared(alice, req.conversationId);
         _assertCleared(bob, req.conversationId);
@@ -545,7 +545,7 @@ contract RequestTest is Test {
         _assertCleared(bob, second.conversationId);
     }
 
-    /// @dev "Same id, same token": the application cannot pin the old token, and the Core never
+    /// @dev "Same id, same token": the application cannot pin the old token, and BLADE never
     /// re-derives it, so the old reply is rejected on every reuse.
     function test_corr_reuseConversationIdWithSameTokenImpossible() public {
         Message memory first = _open(_request());
@@ -553,7 +553,7 @@ contract RequestTest is Test {
 
         Message memory pinned = _request();
         pinned.replyWith = first.replyWith;
-        vm.expectRevert(RequestAgent.ReplyWithAssignedByCore.selector);
+        vm.expectRevert(RequestAgent.ReplyWithAssignedByBlade.selector);
         alice.startRequest(address(bob), pinned);
 
         bytes32 previous = first.replyWith;
@@ -624,7 +624,7 @@ contract RequestTest is Test {
         nu.protocol = req.protocol;
         nu.conversationId = req.conversationId;
 
-        // Initiator's own Core refuses a continuation that does not keep the session token.
+        // Initiator's own agent refuses a continuation that does not keep the session token.
         Message memory noReply;
         noReply.conversationId = req.conversationId;
         vm.expectRevert(Agent.ReplyWithMismatch.selector);
@@ -703,7 +703,7 @@ contract RequestTest is Test {
     /// @dev LIMITATION (documented): sessions are keyed by `conversationId` only. A third agent
     /// that learns a pending id (e.g. from the mempool) can open it first at the participant,
     /// making the honest Request revert. Mitigations are application-level (`_authorizeInbound`,
-    /// unpredictable ids); the Core does not claim front-running resistance.
+    /// unpredictable ids); BLADE does not claim front-running resistance.
     function test_limitation_conversationIdSquattingBlocksHonestRequest() public {
         ScriptedRequestAgent eve = new ScriptedRequestAgent(address(relaySink));
         Message memory req = _request();
@@ -753,7 +753,7 @@ contract RequestTest is Test {
     }
 }
 
-/// @dev Shows the Core writes the assigned token back into the caller's memory message.
+/// @dev Shows BLADE writes the assigned token back into the caller's memory message.
 contract ExposedTokenRequester is RequestAgent {
     bytes32 public lastToken;
 

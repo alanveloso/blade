@@ -27,9 +27,8 @@ contract ExampleTest is Test {
         ExampleCnParticipant p = new ExampleCnParticipant(address(0));
         address[] memory parts = new address[](1);
         parts[0] = address(p);
-        bytes32 id = keccak256("ex-cn");
         uint64 by = uint64(block.timestamp + 10);
-        manager.cfp(parts, id, by);
+        bytes32 id = manager.cfp(parts, by);
         Message memory cfp;
         cfp.performative = uint8(Performative.Cfp);
         cfp.protocol = uint8(Protocol.FipaContractNet);

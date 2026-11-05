@@ -24,9 +24,9 @@ contract QueuedContractNetManager is ContractNetManager {
         _;
     }
 
-    function cfp(address[] calldata peers, Message memory m) external onlyOwner {
-        require(pendingCount[m.conversationId] == 0, "pending decisions");
-        _cfp(peers, m);
+    function cfp(address[] calldata peers, Message memory m) external onlyOwner returns (bytes32) {
+        // BLADE assigns a fresh id; pending decisions cannot collide with a new opening.
+        return _cfp(peers, m);
     }
 
     function evaluate(

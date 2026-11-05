@@ -40,8 +40,6 @@ contract ContractNetHandler is Test {
         autoInform = new AutoCompleteParticipant(uint8(Performative.Inform));
         stranger = new ExposedContractNetParticipant(address(0));
         rogue = new ExposedContractNetParticipant(address(0));
-        ids[0] = keccak256("inv-cn-0");
-        ids[1] = keccak256("inv-cn-1");
         known[0] = address(p1);
         known[1] = address(p2);
         known[2] = address(autoInform);
@@ -50,23 +48,28 @@ contract ContractNetHandler is Test {
     }
 
     function cfp(uint8 idSel, uint8 mask) external {
-        bytes32 id = ids[idSel % N_IDS];
+        uint256 slot = idSel % N_IDS;
+        bytes32 id = ids[slot];
         address[] memory parts = _participants(mask);
         if (parts.length == 0) {
             return;
         }
-        Message memory m = _cfp(id, uint64(block.timestamp + 100));
-        bytes32 beforeOther = _pack(ids[(uint256(idSel) + 1) % N_IDS]);
-        bytes32 beforeSelf = _pack(id);
-        uint8[4] memory slots = _slots(id);
-        try manager.cfp(parts, m) {
-            lastCfp[idSel % N_IDS] = m;
+        Message memory m = _cfp(uint64(block.timestamp + 100));
+        bytes32 beforeOther = _pack(ids[(slot + 1) % N_IDS]);
+        bytes32 beforeSelf = id != bytes32(0) ? _pack(id) : bytes32(0);
+        uint8[4] memory slots = id != bytes32(0) ? _slots(id) : _emptySlots();
+        try manager.cfp(parts, m) returns (bytes32 opened) {
+            ids[slot] = opened;
+            m.conversationId = opened;
+            lastCfp[slot] = m;
             successfulMutations++;
-            _assertSteps(id, slots, Step.Cfp);
+            _assertSteps(opened, _slots(opened), Step.Cfp);
         } catch {
-            assertEq(_pack(id), beforeSelf, "CN-P2 reverted cfp mutated");
+            if (id != bytes32(0)) {
+                assertEq(_pack(id), beforeSelf, "CN-P2 reverted cfp mutated");
+            }
         }
-        assertEq(_pack(ids[(uint256(idSel) + 1) % N_IDS]), beforeOther, "CN-I7 cfp sibling");
+        assertEq(_pack(ids[(slot + 1) % N_IDS]), beforeOther, "CN-I7 cfp sibling");
         calls++;
     }
 
@@ -77,7 +80,8 @@ contract ContractNetHandler is Test {
         Performative act = _act(actSel);
         Message memory inbound = lastCfp[i];
         if (inbound.conversationId == bytes32(0)) {
-            inbound = _cfp(id, uint64(block.timestamp + 1));
+            inbound = _cfp(uint64(block.timestamp + 1));
+            inbound.conversationId = id;
         }
         Message memory outbound;
         outbound.performative = uint8(act);
@@ -181,12 +185,12 @@ contract ContractNetHandler is Test {
         bytes32 before = _pack(id);
         address[] memory z = new address[](1);
         z[0] = address(0);
-        try manager.cfp(z, _cfp(id, uint64(block.timestamp + 10))) {
+        try manager.cfp(z, _cfp(uint64(block.timestamp + 10))) {
             revert("zero participant accepted");
         } catch {}
         address[] memory eoa = new address[](1);
         eoa[0] = address(0xBEEF);
-        try manager.cfp(eoa, _cfp(id, uint64(block.timestamp + 10))) {
+        try manager.cfp(eoa, _cfp(uint64(block.timestamp + 10))) {
             revert("eoa participant accepted");
         } catch {}
         assertEq(_pack(id), before, "invalid cfp mutated");
@@ -325,14 +329,16 @@ contract ContractNetHandler is Test {
         return Performative.RejectProposal;
     }
 
-    function _cfp(bytes32 id, uint64 replyBy) internal pure returns (Message memory m) {
+    function _cfp(uint64 replyBy) internal pure returns (Message memory m) {
         m.performative = uint8(Performative.Cfp);
         m.protocol = uint8(Protocol.FipaContractNet);
-        m.conversationId = id;
-        m.replyWith = keccak256(abi.encodePacked(id, "rw"));
+        m.conversationId = bytes32(0);
+        m.replyWith = keccak256("cn-rw");
         m.replyBy = replyBy;
         m.content = NEEDLE;
     }
+
+    function _emptySlots() internal pure returns (uint8[4] memory s) {}
 
     function _partition(bytes32 id, uint8 mode)
         internal

@@ -7,7 +7,7 @@ import {Message} from "../../src/core/Message.sol";
 import {Protocol} from "../../src/core/Protocol.sol";
 import {Performative} from "../../src/core/Performative.sol";
 
-/// @dev Audit comparators only. Same owner policy and external signatures; not integrated in core.
+/// @dev Audit baseline: keeps caller-selected conversation ids (pre-generation policy).
 contract AuditNativeManager is ContractNetManager {
     address public immutable owner;
 
@@ -19,8 +19,13 @@ contract AuditNativeManager is ContractNetManager {
         _;
     }
 
-    function cfp(address[] calldata peers, Message memory m) external virtual onlyOwner {
-        _cfp(peers, m);
+    function cfp(address[] calldata peers, Message memory m)
+        external
+        virtual
+        onlyOwner
+        returns (bytes32)
+    {
+        return _cfp(peers, m);
     }
 
     function evaluate(
@@ -31,39 +36,67 @@ contract AuditNativeManager is ContractNetManager {
     ) external virtual onlyOwner {
         _evaluate(id, accept, reject, silent);
     }
+
+    /// @dev Historical comparator: application supplies the id.
+    function _openConversationId(Message memory message)
+        internal
+        virtual
+        override
+        returns (bytes32)
+    {
+        require(message.conversationId != bytes32(0), "id required");
+        return message.conversationId;
+    }
 }
 
 /// @dev Keeps caller-selected IDs but permanently refuses reuse (one permanent slot per ID).
 contract AuditUniqueManager is AuditNativeManager {
     mapping(bytes32 => bool) public used;
 
-    function cfp(address[] calldata peers, Message memory m) external override onlyOwner {
+    function cfp(address[] calldata peers, Message memory m)
+        external
+        override
+        onlyOwner
+        returns (bytes32)
+    {
         require(!used[m.conversationId], "used id");
         used[m.conversationId] = true;
-        _cfp(peers, m);
+        return _cfp(peers, m);
     }
 }
 
-/// @dev Generates unique IDs with one persistent counter. Changes opening API (returns selected ID).
-contract AuditGeneratedIdManager is AuditNativeManager {
+/// @dev Thin wrapper over BLADE-generated ids (same policy now shipping in production).
+contract AuditGeneratedIdManager is ContractNetManager {
+    address public immutable owner;
     uint256 public nonce;
     event GeneratedConversation(bytes32 indexed id);
 
-    function cfp(address[] calldata peers, Message memory m) external override onlyOwner {
-        // The inherited opening must not bypass the generating policy.
-        _generated(peers, m);
+    constructor() Agent(address(0)) {
+        owner = msg.sender;
+    }
+    modifier onlyOwner() {
+        require(msg.sender == owner, "owner");
+        _;
     }
 
-    function open(address[] calldata peers, Message memory m) external onlyOwner returns (bytes32) {
-        return _generated(peers, m);
+    function cfp(address[] calldata peers, Message memory m) external onlyOwner returns (bytes32) {
+        return open(peers, m);
     }
 
-    function _generated(address[] calldata peers, Message memory m) private returns (bytes32 id) {
-        require(m.conversationId == bytes32(0), "id assigned by manager");
-        id = keccak256(abi.encode(block.chainid, address(this), ++nonce));
-        m.conversationId = id;
+    function open(address[] calldata peers, Message memory m) public onlyOwner returns (bytes32 id) {
+        id = _cfp(peers, m);
+        // Mirror historical gas/event surface; BLADE already assigned via ++_conversationNonce.
+        ++nonce;
         emit GeneratedConversation(id);
-        _cfp(peers, m);
+    }
+
+    function evaluate(
+        bytes32 id,
+        address[] calldata accept,
+        address[] calldata reject,
+        address[] calldata silent
+    ) external onlyOwner {
+        _evaluate(id, accept, reject, silent);
     }
 }
 
@@ -74,7 +107,12 @@ contract AuditTokenManager is AuditNativeManager {
     mapping(bytes32 => bytes32) public token;
     mapping(bytes32 => bool) private busy;
 
-    function cfp(address[] calldata peers, Message memory m) external override onlyOwner {
+    function cfp(address[] calldata peers, Message memory m)
+        external
+        override
+        onlyOwner
+        returns (bytes32)
+    {
         bytes32 id = m.conversationId;
         require(!busy[id], "busy");
         require(m.replyWith == bytes32(0), "core token");
@@ -83,9 +121,10 @@ contract AuditTokenManager is AuditNativeManager {
         busy[id] = true;
         token[id] = keccak256(abi.encode(block.chainid, address(this), id, ++nonce));
         m.replyWith = token[id];
-        _cfp(peers, m);
+        id = _cfp(peers, m);
         busy[id] = false;
         _cleanToken(id);
+        return id;
     }
 
     function evaluate(
